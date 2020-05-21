@@ -5,7 +5,7 @@ Created on Fri May 15 13:43:53 2020
 @author: Colin
 """
 
-from tqdm import trange
+from tqdm import trange, tqdm
 from igraph import *
 import numpy as np
 import cvxpy as cp
@@ -47,6 +47,7 @@ def generateHistories(graph, num_histories, history_len, discount_factor):
     # generate some histories
     histories = []
     weights = graph.es["weight"]
+    # TODO: parallelize this...
     for i in trange(num_histories):
         # perform random walk on given graph, starting at node "1"
         walk = graph.random_walk(0, history_len)
@@ -75,11 +76,28 @@ def solveWeights(graph, histories, discount_factor):
     
     # create value equations for each history
     values = []
-    for history in histories:
+    for history in tqdm(histories):
         word = history[0]
         value = []
         for depth, edge in enumerate(word):
-            factor = discount_factor ** depth
-            value.append(weights[edge] * factor)
-        values.append(np.sum(value))
-    pass
+            factor = cp.power(discount_factor, depth)
+            value.append(cp.multiply(weights[edge], factor))
+        values.append(cp.sum(value))
+    
+    vals = np.array(values)
+    sums = np.array(histories)[:, 1]
+    cost = cp.sum_squares(vals - sums)
+    
+    prob = cp.Problem(cp.Minimize(cost))
+    prob.solve()
+    
+    # Print result.
+    print("\nThe optimal value is", prob.value)
+    print("The optimal x is")
+    print(weights.value)
+    print("The norm of the residual is ", cp.norm(vals - sums, p=2).value)
+    print(prob.status)
+
+#g = generateGraph(5, 0.5, -5.0, 5.0)
+#h = generateHistories(g, 100, 1000, 0.5)
+solveWeights(g, h, 0.5)
