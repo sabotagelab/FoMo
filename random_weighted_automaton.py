@@ -75,18 +75,22 @@ def solveWeights(graph, histories, discount_factor):
     weights = cp.Variable(graph.ecount())
     
     # create value equations for each history
-    values = []
-    for history in tqdm(histories):
+    values = np.zeros((len(histories), graph.ecount()))
+    for h, history in tqdm(enumerate(histories)):
         word = history[0]
         value = []
         for depth, edge in enumerate(word):
-            factor = cp.power(discount_factor, depth)
+            factor = discount_factor ** depth
+#            factor = cp.power(discount_factor, depth)
+            values[h, edge] += factor
             value.append(cp.multiply(weights[edge], factor))
-        values.append(cp.sum(value))
+#        values.append(cp.sum(value))
     
     vals = np.array(values)
     sums = np.array(histories)[:, 1]
-    cost = cp.sum_squares(vals - sums)
+#    cost = cp.sum_squares(vals - sums)
+    val_w = values @ weights
+    cost = cp.sum_squares(val_w - sums)
     
     prob = cp.Problem(cp.Minimize(cost))
     prob.solve()
