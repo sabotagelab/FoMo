@@ -99,9 +99,9 @@ def solveWeights(graph, histories, discount_factor):
     print("\nThe optimal value is", prob.value)
     print("The optimal x is")
     print(weights.value)
-    print("The norm of the residual is ", cp.norm(vals - sums, p=2).value)
+    print("The norm of the residual is ", cp.norm(weights.value - graph.es["weight"], p=2).value)
     print(prob.status)
 
-#g = generateGraph(5, 0.5, -5.0, 5.0)
-#h = generateHistories(g, 100, 1000, 0.5)
+#g = generateGraph(50, 0.5, -5.0, 5.0)
+h = generateHistories(g, 500, 3000, 0.5)
 solveWeights(g, h, 0.5)
