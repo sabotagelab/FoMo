@@ -6,7 +6,9 @@ Created on Fri May 15 13:43:53 2020
 """
 
 from tqdm import trange, tqdm
+from joblib import Parallel, delayed
 from igraph import *
+import multiprocessing
 import numpy as np
 import cvxpy as cp
 
@@ -45,29 +47,29 @@ def generateGraph(num_vertices, prob_edges, min_weight, max_weight):
 
 def generateHistories(graph, num_histories, history_len, discount_factor):
     # generate some histories
-    histories = []
     weights = graph.es["weight"]
-    # TODO: parallelize this...
-    for i in trange(num_histories):
-        # perform random walk on given graph, starting at node "1"
-        walk = graph.random_walk(0, history_len)
-        edges = []
-        # compute accumulated value of the walk
-        value = 0
-        for depth in range(len(walk)-1):
-            from_vertex = walk[depth]
-            to_vertex = walk[depth + 1]
-            edge_tuple = ([from_vertex], [to_vertex])
-            edge = graph.es.find(_between=edge_tuple)
-            factor = discount_factor ** depth
-            edge_weight = weights[edge.index]
-            value += factor * edge_weight
-            edges.append(edge.index)
-            
-        # add walk and value to histories
-        histories.append((edges, value))
-        
+    num_cores = multiprocessing.cpu_count()
+    histories = Parallel(n_jobs=num_cores,verbose=5)(delayed(_perHistory)(graph, weights, i, history_len, discount_factor) for i in trange(num_histories))
+
     return histories
+    
+    
+def _perHistory(graph, weights, i, history_len, discount_factor):
+    # perform random walk on given graph, starting at node "1"
+    walk = graph.random_walk(0, history_len)
+    edges = []
+    # compute accumulated value of the walk
+    value = 0
+    for depth in range(len(walk)-1):
+        from_vertex = walk[depth]
+        to_vertex = walk[depth + 1]
+        edge_tuple = ([from_vertex], [to_vertex])
+        edge = graph.es.find(_between=edge_tuple)
+        factor = discount_factor ** depth
+        edge_weight = weights[edge.index]
+        value += factor * edge_weight
+        edges.append(edge.index)
+    return [edges, value]
     
     
 def solveWeights(graph, histories, discount_factor):
@@ -102,6 +104,9 @@ def solveWeights(graph, histories, discount_factor):
     print("The norm of the residual is ", cp.norm(weights.value - graph.es["weight"], p=2).value)
     print(prob.status)
 
-#g = generateGraph(50, 0.5, -5.0, 5.0)
-h = generateHistories(g, 500, 3000, 0.5)
-solveWeights(g, h, 0.5)
+
+
+if __name__ == "__main__":
+    g = generateGraph(5, 0.5, -5.0, 5.0)
+    h = generateHistories(g, 1000, 3000, 0.5)
+    solveWeights(g, h, 0.5)
