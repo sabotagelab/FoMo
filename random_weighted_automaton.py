@@ -96,15 +96,15 @@ def solveWeights(graph, histories, discount_factor):
     
     prob = cp.Problem(cp.Minimize(cost))
     prob.solve()
-    
+
+    norm = cp.norm(weights.value - graph.es["weight"], p=2).value
     # Print result.
     print("\nThe optimal value is", prob.value)
     print("The optimal x is")
     print(weights.value)
-    print("The norm of the residual is ", cp.norm(weights.value - graph.es["weight"], p=2).value)
+    print("The norm of the residual is ", norm)
     print(prob.status)
-
-
+    return {"optimal": prob.value, "weights": weights.value, "norm": norm, "status": prob.status}
 
 if __name__ == "__main__":
     g = generateGraph(5, 0.5, -5.0, 5.0)
