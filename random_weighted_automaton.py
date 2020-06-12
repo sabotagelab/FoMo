@@ -15,7 +15,7 @@ import cvxpy as cp
 
 def generateGraph(num_vertices, prob_edges, min_weight, max_weight):
     # make random graph
-    g = Graph.Erdos_Renyi(num_vertices, prob_edges, directed=True, loops=True)
+    g = Graph.Erdos_Renyi(num_vertices, prob_edges, directed=True, loops=False)
         
     # remove terminal vertices from graph
 
@@ -37,6 +37,7 @@ def generateGraph(num_vertices, prob_edges, min_weight, max_weight):
     g.ecount()
     # change to np.random.random for non-integer weights
     weights = np.random.randint(w_min, w_max, g.ecount())
+    # weights = (np.random.random(g.ecount()) - 0.5) * 20000.0
     g.es["weight"] = weights
     g.es["label"] = weights
 
@@ -57,6 +58,8 @@ def generateHistories(graph, num_histories, history_len, discount_factor):
 def _perHistory(graph, weights, i, history_len, discount_factor):
     # perform random walk on given graph, starting at node "1"
     walk = graph.random_walk(0, history_len)
+    # perform random walk on given graph, starting from random node
+    # walk = graph.random_walk(np.random.randint(0, graph.vcount()))
     edges = []
     # compute accumulated value of the walk
     value = 0
@@ -80,17 +83,12 @@ def solveWeights(graph, histories, discount_factor):
     values = np.zeros((len(histories), graph.ecount()))
     for h, history in tqdm(enumerate(histories)):
         word = history[0]
-        value = []
         for depth, edge in enumerate(word):
             factor = discount_factor ** depth
-#            factor = cp.power(discount_factor, depth)
             values[h, edge] += factor
-            value.append(cp.multiply(weights[edge], factor))
-#        values.append(cp.sum(value))
-    
-    vals = np.array(values)
+
     sums = np.array(histories)[:, 1]
-#    cost = cp.sum_squares(vals - sums)
+
     val_w = values @ weights
     cost = cp.sum_squares(val_w - sums)
     
@@ -104,7 +102,9 @@ def solveWeights(graph, histories, discount_factor):
     print(weights.value)
     print("The norm of the residual is ", norm)
     print(prob.status)
-    return {"optimal": prob.value, "weights": weights.value, "norm": norm, "status": prob.status}
+    return {"optimal": prob.value, "weights": weights.value, "values": values,
+            "norm": norm, "status": prob.status}
+
 
 if __name__ == "__main__":
     g = generateGraph(5, 0.5, -5.0, 5.0)
