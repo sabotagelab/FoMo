@@ -18,16 +18,15 @@ def generateGraph(num_vertices, prob_edges, min_weight, max_weight):
     g = Graph.Erdos_Renyi(num_vertices, prob_edges, directed=True, loops=False)
         
     # remove terminal vertices from graph
-
-    while len(g.vs.select(_degree_lt=2)) > 0:
-        for vertex in g.vs.select(_degree_lt=2):
-            vertex["current"] = True
-            # connect a random vertex to this one and this one to another one
-            from_vert = np.random.choice(g.vs.select(current_ne=True))
-            g.add_edge(from_vert, vertex)
-            to_vert = np.random.choice(g.vs.select(current_ne=True))
-            g.add_edge(vertex, to_vert)
-            vertex["current"] = False
+    g.vs["od"] = g.vs.degree(mode=OUT, loops=False)
+    for vertex in g.vs.select(od_lt=2):
+        vertex["current"] = True
+        # connect a random vertex to this one and this one to another one
+        from_vert = np.random.choice(g.vs.select(current_ne=True))
+        g.add_edge(from_vert, vertex)
+        to_vert = np.random.choice(g.vs.select(current_ne=True))
+        g.add_edge(vertex, to_vert)
+        vertex["current"] = False
         
     # min and max weight values
     w_min = min_weight
@@ -108,5 +107,5 @@ def solveWeights(graph, histories, discount_factor):
 
 if __name__ == "__main__":
     g = generateGraph(5, 0.5, -5.0, 5.0)
-    h = generateHistories(g, 1000, 3000, 0.5)
-    solveWeights(g, h, 0.5)
+    # h = generateHistories(g, 1000, 3000, 0.5)
+    # solveWeights(g, h, 0.5)

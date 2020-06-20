@@ -63,7 +63,7 @@ if __name__ == "__main__":
 
     num_cores = multiprocessing.cpu_count() - 1
     # g = generateGraph(100, 0.5, -5.0, 5.0)
-    g = generateGraph(25, 0.5, -5.0, 5.0)
+    g = generateGraph(5, 0.5, -5.0, 5.0)
     # iterate over graph sizes
     # norms = Parallel(n_jobs=num_cores,verbose=5)(delayed(experiment)(s, 0.5, -5.0, 5.0, 1000, 1000, 0.5) for s in tqdm(np.logspace(1, 10, base=2.0)))
 
@@ -81,11 +81,11 @@ if __name__ == "__main__":
 
     # compare the value of a history on the true graph to a history on the graph
     # with estimated weights
-    mean_diffs = []
-    for s in np.linspace(0.01, 0.99):
-        diffs = Parallel(n_jobs=num_cores, verbose=5)(delayed(compareExperiment)(g, g.ecount(), 100, s) for i in range(100))
-        mean_diff = np.mean(diffs)
-        mean_diffs.append(mean_diff)
+    # mean_diffs = []
+    # for s in np.linspace(0.01, 0.99):
+    #     diffs = Parallel(n_jobs=num_cores, verbose=5)(delayed(compareExperiment)(g, g.ecount(), 100, s) for i in range(100))
+    #     mean_diff = np.mean(diffs)
+    #     mean_diffs.append(mean_diff)
 
     # check for problems with precision
     # norms = Parallel(n_jobs=num_cores, verbose=5)(
