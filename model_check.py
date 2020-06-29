@@ -317,7 +317,7 @@ def checkObligation(g, a):
 
 def isCTLS(a):
     # returns true if a is a well formed CTL* formula
-    pass
+    return True
 
 
 def isSTIT(a):
@@ -381,7 +381,7 @@ def checkConditional(g, a, x, t):
 
     for m in optimal:
         if isCTLS(a):
-            return m[1].checkCTL('temp.smv', a)
+            return m[1].checkCTL('temp.smv', 'A' + a)
         elif isSTIT(a):
             phi = getPhi(a)
             if not negSTIT(a):
