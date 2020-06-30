@@ -31,7 +31,9 @@ class Automaton(object):
         self.graph.vs["name"] = [str(v.index) for v in self.graph.vs]
         self.num_clones = 0
         self.q0 = q0
+        self.qn = q0
         self.q_previous = []
+        self.counter = False
         for action in actions:
             for edge in actions[action]:
                 edge = graph.es[edge]
@@ -52,6 +54,16 @@ class Automaton(object):
             if action not in actions:
                 actions.append(action)
         return actions
+
+
+    def setCounter(self, var_name='c', start=0):
+        """
+        create a simple counter in this automaton
+
+        :param var_name:
+        :return:
+        """
+        self.counter = (var_name, start)
 
 
     def forceKn(self, kn, source=0):
@@ -134,13 +146,14 @@ class Automaton(object):
         return self
 
 
-    def optimal(self, discount, best=True, punish=-1000):
+    def optimal(self, discount, best=True, punish=-1000, steps=100):
         """
         solve graph as MDP for most (or least) optimal strategy and return value
 
         :param discount:
         :param best:
         :param punish:
+        :param steps:
         :return:
         """
         vcount = self.graph.vcount()
@@ -204,7 +217,7 @@ class Automaton(object):
                     t[i, j, j] = 1
             # ... change the reward corresponding to actually taking the edge.
             r[i, tup[0], tup[1]] = edge["weight"] * mod
-        sol = mdp.ValueIteration(t, r, discount)
+        sol = mdp.FiniteHorizon(t, r, discount, N=steps)
         sol.run()
         # TODO: is negated value the same as value of worst policy?
         return sol.V[0] * mod
@@ -215,6 +228,15 @@ class Automaton(object):
         self.convertToNuXmv(file, x)
         # nuxmv = "nuXmv"
         nuxmv = "E:\\Programs\\nuXmv-2.0.0-win64\\bin\\nuXmv.exe"
+
+        # with open("cmd.txt", 'w') as f:
+        #     f.write("read_model -i " + file + "\n")
+        #     f.write("flatten_hierarchy\n")
+        #     f.write("encode_variables\n")
+        #     f.write("build_model\n")
+        #     f.write("check_ctlspec -p \"" + x + "\"")
+
+        # out = subprocess.run([nuxmv, "-source", "cmd.txt", file], shell=True, stdout=subprocess.PIPE)
         out = subprocess.run([nuxmv, file], shell=True, stdout=subprocess.PIPE)
         check = "true" in str(out.stdout)
         return check
@@ -227,11 +249,12 @@ class Automaton(object):
         :return:
         """
         with open(file, 'w') as f:
-            sep = ', '
             f.write("MODULE main\n\n")
             self._writeStates(f)
 
             self._writeNames(f)
+
+            self._writeVars(f)
 
             # begin ASSIGN constraint for state and name transitions
             f.write("ASSIGN\n")
@@ -241,6 +264,9 @@ class Automaton(object):
 
             # Names:
             self._writeNameTrans(f)
+
+            # Properties:
+            self._writePropTrans(f)
 
             # Specification
             f.write(lang.upper() + "SPEC " + x + ";")
@@ -270,7 +296,7 @@ class Automaton(object):
     def _writeStateTrans(self, f):
         sep = ', '
         # set initial state
-        f.write(" init(state) := 0;\n")
+        f.write(" init(state) := " + str(self.q0) + ";\n")
         # define state transitions
         f.write(" next(state) :=\n")
         f.write("  case\n")
@@ -291,7 +317,8 @@ class Automaton(object):
 
     def _writeNameTrans(self, f):
         # set initial name
-        f.write(" init(name) := 0;\n")
+        init_name = self.graph.vs["name"][self.q0]
+        f.write(" init(name) := " + str(init_name) + ";\n")
         # define name transitions
         f.write(" next(name) :=\n")
         f.write("  case\n")
@@ -309,29 +336,85 @@ class Automaton(object):
         f.write("\n")
 
 
+    def _writeVars(self, f):
+        # if auto has a counter
+        if self.counter:
+            # ... then write the counter var
+            f.write("VAR " + str(self.counter[0]) + " : integer;\n\n")
+
+
+    def _writePropTrans(self, f):
+        # if auto has a counter
+        if self.counter:
+            # ... then write the counter transitions
+            c = str(self.counter[0])
+            f.write(" init(" + c + ") := " + str(self.counter[1]) + ";\n")
+            f.write(" next(" + c + ") := (TRUE)?(" + c + "+1):(" + c + ");\n\n")
+
+
+class Obligation(object):
+    """
+    Contains an obligation in Dominance Act Utilitarian deontic logic
+    """
+    def __init__(self, phi, is_ctls, is_neg):
+        """
+        Creates an Obligation object
+
+        :param phi:
+        :param is_ctls:
+        :param is_neg:
+        """
+        self.phi = phi
+        self.is_ctls = is_ctls
+        self.is_neg = is_neg
+        self.is_stit = not is_ctls
+
+    @classmethod
+    def fromCTL(cls, phi):
+        """
+        Creates an Obligation object from a CTL string
+
+        :param phi:
+        :return:
+        """
+        return cls(phi, True, False)
+
+    def isCTLS(self):
+        """
+        Checks if obligation is a well formed CTL* formula
+
+        :return:
+        """
+        return self.is_ctls
+
+    def isSTIT(self):
+        """
+        Checks if obligation is a well formed dstit statement
+
+        :return:
+        """
+        return self.is_stit
+
+    def isNegSTIT(self):
+        """
+        Checks if obligation is of the form ![alpha dstit: phi]
+
+        :return:
+        """
+        return (self.is_stit and self.is_neg)
+
+    def getPhi(self):
+        """
+        Gets the inner formula of the obligation
+
+        :return:
+        """
+        return self.phi
+
+
 
 def checkObligation(g, a):
     # return checkConditional with trivial condition params
-    pass
-
-
-def isCTLS(a):
-    # returns true if a is a well formed CTL* formula
-    return True
-
-
-def isSTIT(a):
-    # returns true if a is a well formed dstit statement, and false otherwise
-    pass
-
-
-def negSTIT(a):
-    # returns true if a is of the form ![alpha dstit: phi], and false otherwise
-    pass
-
-
-def getPhi(a):
-    # returns the inner part of a dstit statement.
     pass
 
 
@@ -345,8 +428,8 @@ def checkConditional(g, a, x, t):
     :param t:
     :return:
     """
-    root = 0
-    choices = g.k(0)
+    root = g.q0
+    choices = g.k(root)
     intervals = []
     gnps = []
     l = len(choices)
@@ -361,14 +444,16 @@ def checkConditional(g, a, x, t):
         # get a list of automata whose first action is kn, and have one history
         # up to depth t, and that history satisfies X, and after that it behaves
         # like g
-        gns = generateFragments(gnp, g, 0, x, t)
+        gns = generateFragments(gnp, g, root, x, t)
+        print(len(gns))
         lows = []
         highs = []
-        for gf in gns:
-            lows.append(gf.optimal(0.5, best=False))
-            highs.append(gf.optimal(0.5, best=True))
-        interval = [np.max(lows), np.max(highs)]
-        intervals.append(interval)
+        if gns:
+            for gf in gns:
+                lows.append(gf.optimal(0.5, best=False))
+                highs.append(gf.optimal(0.5, best=True))
+            interval = [np.max(lows), np.max(highs)]
+            intervals.append(interval)
 
     # find all un-dominated intervals
     # optimal carries tuples containing an optimal action and an automaton
@@ -380,11 +465,11 @@ def checkConditional(g, a, x, t):
             optimal.append((choices[i], gnps[i]))
 
     for m in optimal:
-        if isCTLS(a):
-            return m[1].checkCTL('temp.smv', 'A' + a)
-        elif isSTIT(a):
-            phi = getPhi(a)
-            if not negSTIT(a):
+        if a.isCTLS():
+            return m[1].checkCTL('temp.smv', 'A' + a.getPhi())
+        elif a.isSTIT():
+            phi = a.getPhi()
+            if not a.isNegSTIT():
                 delib = not g.checkCTL('temp.smv', phi)
                 guaranteed = m[1].checkCTL('temp.smv', phi)
                 return delib and guaranteed
@@ -400,7 +485,7 @@ def checkConditional(g, a, x, t):
 
 
 
-def generateFragments(g, g0, q0, x, t):
+def generateFragments(gn, g0, q0, x, t):
     """
     Given an Automaton g, a prototype Automaton g0, a starting state q0,
     a finite horizon condition x, and the length of that horizon t, generate
@@ -408,7 +493,7 @@ def generateFragments(g, g0, q0, x, t):
     depth t, that history satisfies x, and after t the Automaton behaves like
     g0.
 
-    :param g:
+    :param gn:
     :param g0:
     :param q0:
     :param x:
@@ -416,10 +501,14 @@ def generateFragments(g, g0, q0, x, t):
     :return:
     """
 
+    g = deepcopy(gn)
+    # set a clock on the automaton so the condition can be horizon limited
+    # g.setCounter(var_name="fragmentc")
     # set up the condition to be checked in each step
-    f = "A" + x
+    # f = "E [ (E" + x + ") U " + "(fragmentc = " + str(t) + ")]"
+    f = 'E' + x
     # make sure we start from the right state
-    g.q0 = q0
+    g.qn = q0
     # initialize the list of systems with the given system
     systems = [g]
     # until we reach the given horizon...
@@ -428,24 +517,24 @@ def generateFragments(g, g0, q0, x, t):
         # ... for every system we have so far...
         for system in systems:
             # ... get each possible next state for that system...
-            possible_states = system.graph.neighbors(system.q0, mode=OUT)
+            possible_states = system.graph.neighbors(system.qn, mode=OUT)
             # ... and for each possible state...
             for state in possible_states:
                 # copy the system
                 sys_n = deepcopy(system)
                 # make the possible next state the only next state
-                sys_n = sys_n.forceQn(state, source=system.q0)
+                sys_n = sys_n.forceQn(state, source=system.qn)
                 sys_n_ren = deepcopy(sys_n)
                 # tack the prototype system onto the end
-                sys_n_prime = sys_n_ren.union(g0, system.q0)
+                sys_n_prime = sys_n_ren.union(g0, system.qn)
 
                 # if this new system satisfies the condition...
                 if sys_n_prime.checkCTL("temp.smv", f):
                     # ... update the list of previous states
-                    sys_n_prime.q_previous.append(sys_n_prime.q0)
+                    sys_n_prime.q_previous.append(sys_n_prime.qn)
                     # set the system's current state to the only possible next
                     # state
-                    sys_n_prime.q0 = state
+                    sys_n_prime.qn = state
                     # and add the system to our list of systems.
                     new_systems.append(sys_n_prime)
         # all systems have been stepped through, and the satisfactory systems
@@ -457,16 +546,36 @@ def generateFragments(g, g0, q0, x, t):
 
 
 if __name__ == "__main__":
-    graph = pickle.load(open("example.pkl", "rb"))
-    k = {0: [3], 1: [0], 2: [6], 3: [1, 4], 4: [7, 5], 5: [2]}
-    g = Automaton(graph, k)
-    kn = 1
-    gn = deepcopy(g)
-    gn = gn.forceKn(kn)
-    gnr = deepcopy(gn)
-    gnp = gnr.union(g)
-    gns = generateFragments(gnp, g, 0, "F (name = 2 | name = 0)", 3)
-    sol = g.optimal(0.5)
+    # graph = pickle.load(open("example.pkl", "rb"))
+    # k = {0: [3], 1: [0], 2: [6], 3: [1, 4], 4: [7, 5], 5: [2]}
+    # g = Automaton(graph, k)
+    # kn = 1
+    # gn = deepcopy(g)
+    # gn = gn.forceKn(kn)
+    # gnr = deepcopy(gn)
+    # gnp = gnr.union(g)
+    # gns = generateFragments(gnp, g, 0, "F (name = 2 | name = 0)", 3)
+    # sol = g.optimal(0.5)
     # checkConditional(g, '2', 'F (name = 2)', 3)
-    gns[0].graph.write_svg("graph1.svg")
-    out = gns[0].checkCTL("model.smv", "AF (state = 2)")
+    # gns[0].graph.write_svg("graph1.svg")
+    # obl = Obligation.fromCTL("AF (state = 2)")
+    # out = gns[0].checkCTL("model.smv", obl.phi)
+
+    # graph = pickle.load(open("control_graph.pkl", "rb"))
+    # graph.add_edge(8, 0)
+    # graph.es["weight"] = [2, 1, 2, 1, 3, 1, 2, 4, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 2]
+    # k = {0:[0], 1:[17], 2:[2], 3:[1], 4:[16], 5:[4], 6:[3], 7:[15], 8:[5],
+    #      9:[7], 10:[14], 11:[6], 12:[13], 13:[8], 14:[12], 15:[9], 16:[11],
+    #      17:[10], 18:[18]}
+    # g = Automaton(graph, k)
+    # g.setCounter(var_name='x')
+    # obl = Obligation.fromCTL("X (name = 6)")
+    # checkConditional(g, obl, "(x = ")
+
+    graph = Graph(n=3, edges=[(0, 0), (0, 1), (1, 1), (0, 2), (2, 2)],
+                  directed=True)
+    graph.es["weight"] = [1, 3, 2, 4, 2]
+    k = {0: [0, 1], 1: [3], 2: [2], 3: [4]}
+    g = Automaton(graph, k)
+    obl = Obligation.fromCTL("X (name = 0 | name = 1)")
+    out = checkConditional(g, obl, "G (name = 0)", 2)
