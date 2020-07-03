@@ -56,14 +56,16 @@ class Automaton(object):
         return actions
 
 
-    def setCounter(self, var_name='c', start=0):
+    def setCounter(self, var_name='c', start=0, term=1000):
         """
         create a simple counter in this automaton
 
         :param var_name:
+        :param start:
+        :param term:
         :return:
         """
-        self.counter = (var_name, start)
+        self.counter = (var_name, start, term)
 
 
     def forceKn(self, kn, source=0):
@@ -220,10 +222,17 @@ class Automaton(object):
         sol = mdp.FiniteHorizon(t, r, discount, N=steps)
         sol.run()
         # TODO: is negated value the same as value of worst policy?
-        return sol.V[0] * mod
+        return sol.V[self.q0] * mod
 
 
-    def checkCTL(self, file, x):
+    def checkCTL(self, file, x, verbose=False):
+        """
+        Checks the automaton for a given CTL specification
+
+        :param file:
+        :param x:
+        :return:
+        """
         # convert graph to nuXmv model
         self.convertToNuXmv(file, x)
         # nuxmv = "nuXmv"
@@ -239,6 +248,8 @@ class Automaton(object):
         # out = subprocess.run([nuxmv, "-source", "cmd.txt", file], shell=True, stdout=subprocess.PIPE)
         out = subprocess.run([nuxmv, file], shell=True, stdout=subprocess.PIPE)
         check = "true" in str(out.stdout)
+        if verbose:
+            print (out.stdout)
         return check
 
 
@@ -304,11 +315,13 @@ class Automaton(object):
         for v in self.graph.vs:
             # ... get a string representation of all the vertex's successors
             next = [str(vx.index) for vx in v.neighbors(mode=OUT)]
-            next = sep.join(next)
             # and a string rep of this vertex
             state = str(v.index)
             # and write out the transitions to the case
-            f.write("   state = " + state + " : {" + next + "};\n")
+            if next:
+                next = sep.join(next)
+                f.write("   state = " + state + " : {" + next + "};\n")
+
         # default case
         f.write("   TRUE : state;\n")
         f.write("  esac;\n")
@@ -340,7 +353,10 @@ class Automaton(object):
         # if auto has a counter
         if self.counter:
             # ... then write the counter var
-            f.write("VAR " + str(self.counter[0]) + " : integer;\n\n")
+            name = str(self.counter[0])
+            start = str(self.counter[1])
+            end = str(self.counter[2])
+            f.write("VAR " + name + " : " + start + " .. " + end +";\n\n")
 
 
     def _writePropTrans(self, f):
@@ -348,8 +364,10 @@ class Automaton(object):
         if self.counter:
             # ... then write the counter transitions
             c = str(self.counter[0])
+            t = str(self.counter[2])
             f.write(" init(" + c + ") := " + str(self.counter[1]) + ";\n")
-            f.write(" next(" + c + ") := (TRUE)?(" + c + "+1):(" + c + ");\n\n")
+            f.write(" next(" + c + ") := ("+ c + "<" + t +")?(" + c + "+1):(" +
+                    c + ");\n\n")
 
 
 class Obligation(object):
@@ -415,7 +433,7 @@ class Obligation(object):
 
 def checkObligation(g, a):
     # return checkConditional with trivial condition params
-    pass
+    return checkConditional(g, a, "TRUE", 0)
 
 
 def checkConditional(g, a, x, t):
@@ -437,15 +455,14 @@ def checkConditional(g, a, x, t):
     for n in np.arange(l):
         kn = choices[n]
         gn = deepcopy(g)
-        gn = gn.forceKn(kn)
+        gn = gn.forceKn(kn, source=root)
         gnr = deepcopy(gn)
-        gnp = gnr.union(g)
+        gnp = gnr.union(g, target=root)
         gnps.append(gnp)
         # get a list of automata whose first action is kn, and have one history
         # up to depth t, and that history satisfies X, and after that it behaves
         # like g
         gns = generateFragments(gnp, g, root, x, t)
-        print(len(gns))
         lows = []
         highs = []
         if gns:
@@ -459,6 +476,8 @@ def checkConditional(g, a, x, t):
     # optimal carries tuples containing an optimal action and an automaton
     # whose first action is that optimal action.
     optimal = []
+    if not intervals:
+        return False
     inf = np.max(np.min(intervals, axis=1))
     for i, range in enumerate(intervals):
         if range[1] >= inf:
@@ -466,7 +485,10 @@ def checkConditional(g, a, x, t):
 
     for m in optimal:
         if a.isCTLS():
-            return m[1].checkCTL('temp.smv', 'A' + a.getPhi())
+            if a.is_neg:
+                return m[1].checkCTL('temp.smv', '!E' + a.getPhi())
+            else:
+                return m[1].checkCTL('temp.smv', 'A' + a.getPhi())
         elif a.isSTIT():
             phi = a.getPhi()
             if not a.isNegSTIT():
@@ -503,10 +525,10 @@ def generateFragments(gn, g0, q0, x, t):
 
     g = deepcopy(gn)
     # set a clock on the automaton so the condition can be horizon limited
-    # g.setCounter(var_name="fragmentc")
+    g.setCounter(var_name="fragmentc")
     # set up the condition to be checked in each step
-    # f = "E [ (E" + x + ") U " + "(fragmentc = " + str(t) + ")]"
-    f = 'E' + x
+    f = "E [" + x + " U " + "(fragmentc = " + str(t) + ")]"
+    # f = 'E' + x
     # make sure we start from the right state
     g.qn = q0
     # initialize the list of systems with the given system
@@ -572,10 +594,75 @@ if __name__ == "__main__":
     # obl = Obligation.fromCTL("X (name = 6)")
     # checkConditional(g, obl, "(x = ")
 
-    graph = Graph(n=3, edges=[(0, 0), (0, 1), (1, 1), (0, 2), (2, 2)],
-                  directed=True)
-    graph.es["weight"] = [1, 3, 2, 4, 2]
-    k = {0: [0, 1], 1: [3], 2: [2], 3: [4]}
-    g = Automaton(graph, k)
-    obl = Obligation.fromCTL("X (name = 0 | name = 1)")
-    out = checkConditional(g, obl, "G (name = 0)", 2)
+    # graph = Graph(n=3, edges=[(0, 0), (0, 1), (1, 1), (0, 2), (2, 2)],
+    #               directed=True)
+    # graph.es["weight"] = [1, 3, 2, 4, 2]
+    # k = {0: [0, 1], 1: [3], 2: [2], 3: [4]}
+    # g = Automaton(graph, k)
+    # obl = Obligation.fromCTL("X (name = 0 | name = 1)")
+    # out = checkConditional(g, obl, "G (name = 0)", 2)
+
+    # graph1 = Graph(n=10, edges=[(0, 1), (1, 2), (1, 3), (3, 2), (3, 4), (4, 4),
+    #                            (4, 5), (4, 6), (5, 4), (5, 6), (6, 7), (7, 8),
+    #                            (8, 0), (0, 9), (1, 9), (3, 9), (4, 9), (5, 9),
+    #                             (5, 9), (6, 9), (7, 9), (8, 9), (2, 2), (9, 9)],
+    #                directed=True)
+    # graph1.es["weight"] = [5, 2, 5, 2, 7, 5, 5, 5, 3, 1, 7, 10, 5, 0, 0, 0, 0,
+    #                        0, 0, 0, 0, 0, 0, 0]
+    # k = {0:[0, 13], 1:[1, 2, 14], 2:[3, 4, 15], 3:[5, 6, 7, 16], 4:[8, 17],
+    #      5:[9, 18], 6:[10, 19], 7:[11, 20], 8:[12, 21], 9:[22], 10:[23]}
+    # k = {0: [0], 1: [1, 2], 2: [3, 4], 3: [5, 6, 7], 4: [8], 5: [9], 6: [10],
+    #      7: [11], 8: [12], 9: [22], 10: [23], 11: [13], 12: [14], 13: [15],
+    #      14: [16], 15: [17], 16: [18], 17:[19], 18: [20], 19: [21]}
+    graph1 = Graph(n=10, edges=[(0, 1), (1, 2), (1, 3), (3, 2), (3, 4), (4, 4),
+                                (4, 5), (4, 6), (5, 4), (5, 6), (6, 7), (7, 8),
+                                (8, 8), (5, 9), (2, 2), (9, 9)],
+                   directed=True)
+    graph1.es["weight"] = [5, 2, 5, 2, 7, 5, 5, 5, 3, 1, 7, 10, 1, 0, 0, 0]
+    k = {0: [0], 1: [1, 2], 2: [3, 4], 3: [5], 4: [8], 5: [9],
+         6: [10], 7: [11], 8: [12], 10: [14], 11: [15], 12: [13], 13: [6],
+         14: [7]}
+    g1 = Automaton(graph1, k)
+    col_mission1 = g1.checkCTL("temp.smv", "EG !(name = 9)")
+    print("T1: Collision mission (EG !collision) = ", str(col_mission1))
+
+    hwy_mission1 = g1.checkCTL("temp.smv", "EF (name = 4)")
+    print("T1: Highway mission (EF on_highway) = ", str(hwy_mission1))
+
+    # safe_obl = Obligation.fromCTL("[!(name = 9) U c = 4]")
+    g1.setCounter()
+    safe_obl = Obligation.fromCTL("X !(name = 9)")
+    # has_obl = checkConditional(g1, safe_obl, "G !(name = 9)", 1)
+    # print("Safety obligation (O[a cstit: G !collision]/G !collision) = ",
+    #       str(has_obl))
+    g1.q0 = 5
+    has_safe = checkObligation(g1, safe_obl)
+    print("T1: Safety obligation (O[a cstit: X !collision]) = ", str(has_safe))
+
+    fast_obl = Obligation.fromCTL(" [TRUE U (name=6 & c=4)]")
+    fast_obl.is_neg = True
+    g1.q0 = 4
+    has_fast = not checkObligation(g1, fast_obl)
+    print("T1: Fast obligation (!O[a cstit: !(True U reach_exit & c=4)])",
+          str(has_fast))
+
+    graph2 = deepcopy(graph1)
+    # graph2.es["weight"] = [5, 2, 5, 2, 7, 5, 5, 5, 20, 1, 2, 5, 1, 200, 0, 0]
+    # graph2.es["weight"] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 20, 0, 0]
+    graph2.es["weight"] = [0, 0, 0, 0, 0, 0, 20, 0, 20, 0, 0, 0, 0, 0, 0, 0]
+    g2 = Automaton(graph2, k)
+    col_mission2 = g2.checkCTL("temp.smv", "EG !(name = 9)")
+    print("T2: Collision mission (EG !collision) = ", str(col_mission2))
+
+    hwy_mission2 = g2.checkCTL("temp.smv", "EF (name = 4)")
+    print("T2: Highway mission (EF on_highway) = ", str(hwy_mission2))
+
+    g2.q0 = 5
+    has_safe2 = checkObligation(g2, safe_obl)
+    print("T2: Safety obligation (O[a cstit: X !collision]) = ", str(has_safe2))
+
+    g2.q0 = 4
+    g2.setCounter()
+    has_fast2 = not checkObligation(g2, fast_obl)
+    print("T2: Fast obligation (!O[a cstit: !(True U reach_exit & c=4)])",
+          str(has_fast2))
