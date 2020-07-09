@@ -252,6 +252,11 @@ class Automaton(object):
             print (out.stdout)
         return check
 
+    def checkToCTL(self, file, x, negate=False):
+        if negate:
+            return self.checkCTL(file, '!E' + x)
+        else:
+            return self.checkCTL(file, 'A' + x)
 
     def convertToNuXmv(self, file, x, lang="CTL"):
         """
@@ -386,6 +391,7 @@ class Obligation(object):
         self.is_ctls = is_ctls
         self.is_neg = is_neg
         self.is_stit = not is_ctls
+        self.phi_neg = False
 
     @classmethod
     def fromCTL(cls, phi):
@@ -485,19 +491,16 @@ def checkConditional(g, a, x, t):
 
     for m in optimal:
         if a.isCTLS():
-            if a.is_neg:
-                return m[1].checkCTL('temp.smv', '!E' + a.getPhi())
-            else:
-                return m[1].checkCTL('temp.smv', 'A' + a.getPhi())
+            return m[1].checkToCTL('temp.smv', a.getPhi(), a.phi_neg)
         elif a.isSTIT():
             phi = a.getPhi()
             if not a.isNegSTIT():
-                delib = not g.checkCTL('temp.smv', phi)
-                guaranteed = m[1].checkCTL('temp.smv', phi)
+                delib = not g.checkToCTL('temp.smv', phi, a.phi_neg)
+                guaranteed = m[1].checkToCTL('temp.smv', phi, a.phi_neg)
                 return delib and guaranteed
             else:
-                not_delib = g.checkCTL('temp.smv', phi)
-                guaranteed = m[1].checkCTL('temp.smv', phi)
+                not_delib = g.checkToCTL('temp.smv', phi, a.phi_neg)
+                guaranteed = m[1].checkToCTL('temp.smv', phi, a.phi_neg)
                 return not_delib or not guaranteed
         else:
             raise ValueError(
@@ -602,15 +605,50 @@ if __name__ == "__main__":
     # obl = Obligation.fromCTL("X (name = 0 | name = 1)")
     # out = checkConditional(g, obl, "G (name = 0)", 2)
 
-    # graph1 = Graph(n=10, edges=[(0, 1), (1, 2), (1, 3), (3, 2), (3, 4), (4, 4),
-    #                            (4, 5), (4, 6), (5, 4), (5, 6), (6, 7), (7, 8),
-    #                            (8, 0), (0, 9), (1, 9), (3, 9), (4, 9), (5, 9),
-    #                             (5, 9), (6, 9), (7, 9), (8, 9), (2, 2), (9, 9)],
-    #                directed=True)
-    # graph1.es["weight"] = [5, 2, 5, 2, 7, 5, 5, 5, 3, 1, 7, 10, 5, 0, 0, 0, 0,
-    #                        0, 0, 0, 0, 0, 0, 0]
-    # k = {0:[0, 13], 1:[1, 2, 14], 2:[3, 4, 15], 3:[5, 6, 7, 16], 4:[8, 17],
-    #      5:[9, 18], 6:[10, 19], 7:[11, 20], 8:[12, 21], 9:[22], 10:[23]}
+    ograph1 = Graph(n=10, edges=[(0, 1), (1, 2), (1, 3), (3, 2), (3, 4), (2, 2),
+                                 (4, 5), (4, 6), (5, 4), (9, 9), (6, 7), (7, 8),
+                                 (8, 0), (0, 9), (1, 9), (3, 9), (4, 9), (5, 9),
+                                 (6, 9), (7, 9), (8, 9)],
+                   directed=True)
+    ograph1.es["weight"] = [5, 2, 5, 2, 7, 0, 5, 5, 3, 0, 7, 10, 5, 0, 0, 0, 0,
+                            0, 0, 0, 0]
+    k = {0:[0, 13], 1:[1, 2, 14], 2:[3, 4, 15], 3:[6, 7, 16], 4:[8, 17],
+         5:[10, 18], 6:[11, 19], 7:[12, 20], 8:[9], 9:[5]}
+    og = Automaton(ograph1, k)
+
+    col_mission0 = og.checkCTL("temp.smv", "EG !(name = 9)")
+    print("T0: Collision mission (EG !collision) = ", str(col_mission0))
+
+    exit_mission0 = og.checkCTL("temp.smv", "EF (name = 7)")
+    print("T0: Exit mission (EF safe_to_exit) = ", str(exit_mission0))
+
+    hwy_mission0 = og.checkCTL("temp.smv", "EF (name = 4)")
+    print("T0: Highway mission (EF on_highway) = ", str(hwy_mission0))
+
+    safe_obl = Obligation.fromCTL("X !(name = 9)")
+
+    og.q0 = 5
+    has_safe0 = checkObligation(og, safe_obl)
+    print("T0: Safety obligation (O[a cstit: X !collision]) = ", str(has_safe0))
+
+    fast_obl = Obligation.fromCTL(" [TRUE U (name=6 & c<=4)]")
+    fast_obl.phi_neg = True
+
+    og.q0 = 5
+    og.setCounter()
+    has_fast0 = not checkObligation(og, fast_obl)
+    print("T0: Fast obligation (!O[a cstit: !(True U reach_exit & c<=4)]) = ",
+          str(has_fast0))
+
+    agg_obl = Obligation(" [! (name=4 | name=5 | name=9) U name=6]", False, False)
+    agg_obl.phi_neg = True
+
+    og.q0 = 5
+    has_agg0 = not checkObligation(og, agg_obl)
+    print("T0: Aggressive obligation (!O[a cstit: [a: dstit: !(!g U p)]]) = ",
+          str(has_agg0))
+
+
     # k = {0: [0], 1: [1, 2], 2: [3, 4], 3: [5, 6, 7], 4: [8], 5: [9], 6: [10],
     #      7: [11], 8: [12], 9: [22], 10: [23], 11: [13], 12: [14], 13: [15],
     #      14: [16], 15: [17], 16: [18], 17:[19], 18: [20], 19: [21]}
@@ -618,20 +656,25 @@ if __name__ == "__main__":
                                 (4, 5), (4, 6), (5, 4), (5, 6), (6, 7), (7, 8),
                                 (8, 8), (5, 9), (2, 2), (9, 9)],
                    directed=True)
-    graph1.es["weight"] = [5, 2, 5, 2, 7, 5, 5, 5, 3, 1, 7, 10, 1, 0, 0, 0]
-    k = {0: [0], 1: [1, 2], 2: [3, 4], 3: [5], 4: [8], 5: [9],
-         6: [10], 7: [11], 8: [12], 10: [14], 11: [15], 12: [13], 13: [6],
+    graph1.es["weight"] = [5, 2, 5, 2, 7, 5, 5, 5, 20, 1, 7, 10, 1, 0, 0, 0]
+    # k = {0: [0], 1: [1, 2], 2: [3, 4], 3: [5], 4: [8], 5: [9],
+    #      6: [10], 7: [11], 8: [12], 10: [14], 11: [15], 12: [13], 13: [6],
+    #      14: [7]}
+    k = {0: [0], 1: [1, 2], 2: [3, 4], 3: [5], 4: [8], 5: [9, 13],
+         6: [10], 7: [11], 8: [12], 10: [14], 11: [15], 12: [6],
          14: [7]}
     g1 = Automaton(graph1, k)
     col_mission1 = g1.checkCTL("temp.smv", "EG !(name = 9)")
     print("T1: Collision mission (EG !collision) = ", str(col_mission1))
+
+    exit_mission1 = g1.checkCTL("temp.smv", "EF (name = 7)")
+    print("T1: Exit mission (EF safe_to_exit) = ", str(exit_mission1))
 
     hwy_mission1 = g1.checkCTL("temp.smv", "EF (name = 4)")
     print("T1: Highway mission (EF on_highway) = ", str(hwy_mission1))
 
     # safe_obl = Obligation.fromCTL("[!(name = 9) U c = 4]")
     g1.setCounter()
-    safe_obl = Obligation.fromCTL("X !(name = 9)")
     # has_obl = checkConditional(g1, safe_obl, "G !(name = 9)", 1)
     # print("Safety obligation (O[a cstit: G !collision]/G !collision) = ",
     #       str(has_obl))
@@ -639,20 +682,26 @@ if __name__ == "__main__":
     has_safe = checkObligation(g1, safe_obl)
     print("T1: Safety obligation (O[a cstit: X !collision]) = ", str(has_safe))
 
-    fast_obl = Obligation.fromCTL(" [TRUE U (name=6 & c=4)]")
-    fast_obl.is_neg = True
-    g1.q0 = 4
+    g1.q0 = 5
     has_fast = not checkObligation(g1, fast_obl)
-    print("T1: Fast obligation (!O[a cstit: !(True U reach_exit & c=4)])",
+    print("T1: Fast obligation (!O[a cstit: !(True U reach_exit & c<=4)]) = ",
           str(has_fast))
+
+    g1.q0 = 5
+    has_agg1 = not checkObligation(g1, agg_obl)
+    print("T1: Aggressive obligation (!O[a cstit: [a: dstit: !(!g U p)]]) = ",
+          str(has_agg1))
 
     graph2 = deepcopy(graph1)
     # graph2.es["weight"] = [5, 2, 5, 2, 7, 5, 5, 5, 20, 1, 2, 5, 1, 200, 0, 0]
-    # graph2.es["weight"] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 20, 0, 0]
-    graph2.es["weight"] = [0, 0, 0, 0, 0, 0, 20, 0, 20, 0, 0, 0, 0, 0, 0, 0]
+    graph2.es["weight"] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 20, 0, 0]
+    # graph2.es["weight"] = [0, 0, 0, 0, 0, 0, 20, 0, 20, 0, 0, 0, 0, 0, 0, 0]
     g2 = Automaton(graph2, k)
     col_mission2 = g2.checkCTL("temp.smv", "EG !(name = 9)")
     print("T2: Collision mission (EG !collision) = ", str(col_mission2))
+
+    exit_mission2 = g2.checkCTL("temp.smv", "EF (name = 7)")
+    print("T2: Exit mission (EF safe_to_exit) = ", str(exit_mission2))
 
     hwy_mission2 = g2.checkCTL("temp.smv", "EF (name = 4)")
     print("T2: Highway mission (EF on_highway) = ", str(hwy_mission2))
@@ -661,8 +710,13 @@ if __name__ == "__main__":
     has_safe2 = checkObligation(g2, safe_obl)
     print("T2: Safety obligation (O[a cstit: X !collision]) = ", str(has_safe2))
 
-    g2.q0 = 4
+    g2.q0 = 5
     g2.setCounter()
     has_fast2 = not checkObligation(g2, fast_obl)
-    print("T2: Fast obligation (!O[a cstit: !(True U reach_exit & c=4)])",
+    print("T2: Fast obligation (!O[a cstit: !(True U reach_exit & c<=4)]) = ",
           str(has_fast2))
+
+    g2.q0 = 5
+    has_agg2 = not checkObligation(g2, agg_obl)
+    print("T2: Aggressive obligation (!O[a cstit: [a: dstit: !(!g U p)]]) = ",
+          str(has_agg2))
