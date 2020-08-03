@@ -83,7 +83,7 @@ def originalObligations():
           str(has_agg0))
 
 
-def modifiedObligations(safe=True):
+def modifiedObligations(safe=True, verbose=False):
     graph3 = Graph(n=13, edges=[(0, 1), (1, 2), (2, 2), (1, 3), (3, 2), (3, 2),
                                 (3, 4), (4, 4), (4, 5), (4, 9), (5, 4), (5, 9),
                                 (5, 12), (12, 12), (3, 6), (6, 6), (6, 7),
@@ -139,7 +139,7 @@ def modifiedObligations(safe=True):
     ast_obl_re.phi_neg = True
 
     g3.q0 = 5
-    has_ast3 = not checkObligation(g3, ast_obl_re, verbose=True)
+    has_ast3 = not checkObligation(g3, ast_obl_re, verbose=verbose)
     print("T3: Assertive obligation (!O[a cstit: [a dstit: !(!g U p)]]) = ",
           str(has_ast3))
 
@@ -149,6 +149,6 @@ def modifiedObligations(safe=True):
 
     g3.counter = False
     g3.q0 = 5
-    has_agg3 = not checkObligation(g3, agg_obl_re, verbose=True)
+    has_agg3 = not checkObligation(g3, agg_obl_re, verbose=verbose)
     print("T3: Aggressive obligation (!O[a cstit: ![a dstit: (!g U p)]]) = ",
           str(has_agg3))
