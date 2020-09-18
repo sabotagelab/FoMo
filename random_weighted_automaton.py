@@ -13,7 +13,8 @@ import numpy as np
 import cvxpy as cp
 
 
-def generateGraph(num_vertices, prob_edges, min_weight, max_weight):
+def generateGraph(num_vertices, prob_edges, min_weight, max_weight,
+                  symbols=None):
     # make random graph
     g = Graph.Erdos_Renyi(num_vertices, prob_edges, directed=True, loops=False)
         
@@ -40,6 +41,11 @@ def generateGraph(num_vertices, prob_edges, min_weight, max_weight):
     g.es["weight"] = weights
     g.es["label"] = weights
 
+    # choose random labels to put on each state
+    if symbols:
+        g.vs["label"] = np.random.choice(symbols, g.vcount())
+
+
     # plot(g)
     return g
 
@@ -60,6 +66,9 @@ def _perHistory(graph, weights, i, history_len, discount_factor):
     # perform random walk on given graph, starting from random node
     # walk = graph.random_walk(np.random.randint(0, graph.vcount()))
     edges = []
+    labels = []
+    if 'label' in graph.vs.attributes():
+        labels.append(graph.vs["label"][0])
     # compute accumulated value of the walk
     value = 0
     for depth in range(len(walk)-1):
@@ -71,7 +80,10 @@ def _perHistory(graph, weights, i, history_len, discount_factor):
         edge_weight = weights[edge.index]
         value += factor * edge_weight
         edges.append(edge.index)
-    return [edges, value]
+        if 'label' in graph.vs.attributes():
+            labels.append(graph.vs["label"][to_vertex])
+
+    return [edges, value, labels]
     
     
 def solveWeights(graph, histories, discount_factor):
@@ -106,6 +118,7 @@ def solveWeights(graph, histories, discount_factor):
 
 
 if __name__ == "__main__":
-    g = generateGraph(5, 0.5, -5.0, 5.0)
-    # h = generateHistories(g, 1000, 3000, 0.5)
+    g = generateGraph(5, 0.5, -5.0, 5.0, ['a', 'b', 'c'])
+    h = generateHistories(g, 5, 10, 0.5)
+    print(h)
     # solveWeights(g, h, 0.5)
