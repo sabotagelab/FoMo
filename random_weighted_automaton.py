@@ -121,4 +121,4 @@ if __name__ == "__main__":
     g = generateGraph(5, 0.5, -5.0, 5.0, ['a', 'b', 'c'])
     h = generateHistories(g, 5, 10, 0.5)
     print(h)
-    # solveWeights(g, h, 0.5)
+    solveWeights(g, h, 0.5)

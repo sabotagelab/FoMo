@@ -5,6 +5,7 @@ Created September 2020
 """
 
 import subprocess
+import tqdm
 import numpy as np
 from copy import deepcopy
 from igraph import *
@@ -15,7 +16,7 @@ def learnLabels(graph, strings, q0=0):
     labels[q0] = strings[0][0]
     data = []
     pos_labels = [labels]
-    for string in strings:
+    for string in tqdm(strings):
         # account for new labelings after a string is read
         for labeling in pos_labels:
             data.append([labeling, graph.neighbors(q0, mode=OUT)])
