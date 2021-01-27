@@ -1,4 +1,7 @@
-
+.idea/*
+__pycache__/*
+*.graphml
+venv/*
 .idea/workspace.xml
 .idea/vcs.xml
 .idea/other.xml
