@@ -121,8 +121,12 @@ def s_compare(tournament):
 def borda(tournament):
     c = Counter()
     for comp in tournament:
-        c[comp[0]] += 1
-    return dict(c)
+        c[comp[0]] += 1.0
+    max_c = max(c.values())
+    c = dict(c)
+    for key in c:
+        c[key] = c[key]/max_c
+    return c
 
 
 def bradley_terry(tournament):
@@ -248,23 +252,37 @@ def experiment(g_size, e_prob, w_min=0, w_max=10, factor=0.9, pop=1000):
         policies.append(result[0])
         wgt_norms.append(result[1])
 
-    d_mat = np.zeros((len(methods), len(methods)))
+    d_mat = np.zeros((len(policies), len(policies)))
     dist = jaccard_dist
-    for j in range(len(methods)):
-        for k in range(len(methods)):
+    for j in range(len(policies)):
+        for k in range(len(policies)):
             d_mat[j, k] = policy_dist(policies[j], policies[k], dist)
 
     return (d_mat, wgt_norms)
 
 if __name__ == "__main__":
     size = []
-    # size_range = range(5, 50, 5)
-    # prob_range = range(3, 9)
-    size_range = [5, 10, 50]
-    prob_range = [3, 5, 7]
+    # size_range = range(5, 50, 2)
+    size_range = [5, 10, 15, 20, 25, 30, 35, 40]
+    # prob_range = range(3, 9, 1)
+    batches = range(50)
+    # size_range = [25]
+    # prob_range = [3, 5, 7]
+    # prob_range = [0.1, 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    prob_range = [5]
     for sz in size_range:
+        print("Current Graph Size is", sz)
         prob = []
         for pr in prob_range:
             p = pr/10.0
-            prob.append(experiment(sz, p))
+            dmats = []
+            wgtns = []
+            for batch in batches:
+                result = experiment(sz, p, pop=500)
+                dmats.append(result[0])
+                wgtns.append(result[1])
+            # TODO: variance as well as mean?
+            dmat = np.array(dmats).mean(0)
+            wgtn = np.array(wgtns).mean(0)
+            prob.append((dmat, wgtn))
         size.append(prob)
