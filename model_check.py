@@ -12,6 +12,8 @@ from copy import deepcopy
 from igraph import *
 from random_weighted_automaton import *
 
+# TODO: refactor checkObligation, checkConditional, and generateFragments as Automaton class functions
+# ^ the Obligation class could have validatedBy(Automaton)
 
 class Automaton(object):
     def __init__(self, graph, actions, q0=0):
@@ -236,7 +238,9 @@ class Automaton(object):
         # convert graph to nuXmv model
         self.convertToNuXmv(file, x)
         # nuxmv = "nuXmv"
-        nuxmv = "E:\\Programs\\nuXmv-2.0.0-win64\\bin\\nuXmv.exe"
+        # TODO: extract this and make it easier to change
+        # nuxmv = "E:\\Programs\\nuXmv-2.0.0-win64\\bin\\nuXmv.exe"
+        nuxmv = "/home/colin/Downloads/nuXmv-2.0.0-Linux/bin/nuXmv"
 
         # with open("cmd.txt", 'w') as f:
         #     f.write("read_model -i " + file + "\n")
@@ -246,12 +250,14 @@ class Automaton(object):
         #     f.write("check_ctlspec -p \"" + x + "\"")
 
         # out = subprocess.run([nuxmv, "-source", "cmd.txt", file], shell=True, stdout=subprocess.PIPE)
-        out = subprocess.run([nuxmv, file], shell=True, stdout=subprocess.PIPE)
+        # out = subprocess.run([nuxmv, file], shell=True, stdout=subprocess.PIPE)
+        out = subprocess.run([nuxmv, file], stdout=subprocess.PIPE)
         check = "true" in str(out.stdout)
         if verbose:
-            print (out.stdout)
+            print(out.stdout)
         return check
 
+    # TODO: checkLTL by lang="LTL", tag a spec with CTL or LTL, and do CTL* by logical functions of CTL and LTL formulas
     def checkToCTL(self, file, x, negate=False, verbose=False):
         """
         Checks an automaton for a CTL specification, given an LTL specification.
@@ -459,6 +465,7 @@ def checkObligation(g, a, verbose=False):
     return checkConditional(g, a, "TRUE", 0, verbose=verbose)
 
 
+# TODO: refactor checkConditional into smaller functions so I can use some of the juicy bits elsewhere
 def checkConditional(g, a, x, t, verbose=False):
     """
     Check an automaton for if it has a given obligation under a given condition.
@@ -552,7 +559,7 @@ def checkConditional(g, a, x, t, verbose=False):
 
 def generateFragments(gn, g0, q0, x, t):
     """
-    Given an Automaton g, a prototype Automaton g0, a starting state q0,
+    Given an Automaton gn, a prototype Automaton g0, a starting state q0,
     a finite horizon condition x, and the length of that horizon t, generate
     a list of all Automata that start from q0 and have only one history up to
     depth t, that history satisfies x, and after t the Automaton behaves like

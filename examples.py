@@ -152,3 +152,8 @@ def modifiedObligations(safe=True, verbose=False):
     has_agg3 = not checkObligation(g3, agg_obl_re, verbose=verbose)
     print("T3: Aggressive obligation (!O[a cstit: ![a dstit: (!g U p)]]) = ",
           str(has_agg3))
+
+
+if __name__ == "__main__":
+    # originalObligations()
+    modifiedObligations(verbose=True)
