@@ -151,6 +151,16 @@ class Automaton(object):
 
 
     def optimal(self, discount, best=True, punish=-1000, steps=100):
+        mod = 1
+        if not best:
+            mod = -1
+        tr = self.to_mdp(best, punish)
+        sol = mdp.FiniteHorizon(tr[0], tr[1], discount, N=steps)
+        sol.run()
+        return sol.V[self.q0] * mod
+
+
+    def to_mdp(self, best=True, punish=-1000):
         """
         solve graph as MDP for most (or least) optimal strategy and return value
 
@@ -221,10 +231,7 @@ class Automaton(object):
                     t[i, j, j] = 1
             # ... change the reward corresponding to actually taking the edge.
             r[i, tup[0], tup[1]] = edge["weight"] * mod
-        sol = mdp.FiniteHorizon(t, r, discount, N=steps)
-        sol.run()
-        # TODO: is negated value the same as value of worst policy?
-        return sol.V[self.q0] * mod
+        return (t, r)
 
 
     def checkCTL(self, file, x, verbose=False):

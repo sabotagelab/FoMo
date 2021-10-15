@@ -86,7 +86,7 @@ def _perHistory(graph, weights, i, history_len, discount_factor):
     return [edges, value, labels]
     
     
-def solveWeights(graph, histories, discount_factor):
+def solveWeights(graph, histories, discount_factor, verbose=False):
     # make list of edges, whose weights will be solved for
     weights = cp.Variable(graph.ecount())
     
@@ -107,12 +107,14 @@ def solveWeights(graph, histories, discount_factor):
     prob.solve()
 
     norm = cp.norm(weights.value - graph.es["weight"], p=2).value
-    # Print result.
-    print("\nThe optimal value is", prob.value)
-    print("The optimal x is")
-    print(weights.value)
-    print("The norm of the residual is ", norm)
-    print(prob.status)
+    if verbose:
+        # Print result.
+        print("\nThe optimal value is", prob.value)
+        print("The optimal x is")
+        print(weights.value)
+        print("The norm of the residual is ", norm)
+        print(prob.status)
+
     return {"optimal": prob.value, "weights": weights.value, "values": values,
             "norm": norm, "status": prob.status}
 

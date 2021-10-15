@@ -1,4 +1,7 @@
-
+.idea/*
+__pycache__/*
+*.graphml
+venv/*
 .idea/workspace.xml
 .idea/vcs.xml
 .idea/other.xml
@@ -9,6 +12,7 @@ __pycache__/random_weighted_automaton.cpython-35.pyc
 *.svg
 *.png
 *.pdf
+*.pkl
 .idea/dictionaries/Colin.xml
 *.smv
 __pycache__/model_check.cpython-35.pyc
