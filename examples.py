@@ -6,7 +6,9 @@ Created July 2020
 
 from random_weighted_automaton import *
 from model_check import *
+from obenum import enum
 import pickle
+
 
 def simpleExperiment():
     graph = pickle.load(open("example.pkl", "rb"))
@@ -17,7 +19,7 @@ def simpleExperiment():
     gn = gn.forceKn(kn)
     gnr = deepcopy(gn)
     gnp = gnr.union(g)
-    gns = generateFragments(gnp, g, 0, "F (name = 2 | name = 0)", 3)
+    gns = generate_fragments(gnp, g, 0, "F (name = 2 | name = 0)", 3)
     sol = g.optimal(0.5)
     print("optimal actions: ", sol)
     checkConditional(g, '2', 'F (name = 2)', 3)
@@ -41,18 +43,22 @@ def originalObligations():
 
     col_mission0 = og.checkCTL("temp.smv", "EG !(name = 9)")
     print("T0: Collision mission (EG !collision) = ", str(col_mission0))
+    assert col_mission0
 
     exit_mission0 = og.checkCTL("temp.smv", "EF (name = 7)")
     print("T0: Exit mission (EF safe_to_exit) = ", str(exit_mission0))
+    assert exit_mission0
 
     hwy_mission0 = og.checkCTL("temp.smv", "EF (name = 4)")
     print("T0: Highway mission (EF on_highway) = ", str(hwy_mission0))
+    assert hwy_mission0
 
     safe_obl = Obligation.fromCTL("X !(name = 9)")
 
     og.q0 = 5
     has_safe0 = checkObligation(og, safe_obl)
     print("T0: Safety obligation (O[a cstit: X !collision]) = ", str(has_safe0))
+    assert not has_safe0
 
     fast_obl = Obligation.fromCTL(" [TRUE U (name=6 & c<=4)]")
     fast_obl.phi_neg = True
@@ -62,6 +68,7 @@ def originalObligations():
     has_fast0 = not checkObligation(og, fast_obl)
     print("T0: Fast obligation (!O[a cstit: !(True U reach_exit & c<=4)]) = ",
           str(has_fast0))
+    assert has_fast0
 
     ast_obl = Obligation(" [! (name=4) U (name=6 | name=9)]", False, False)
     ast_obl.phi_neg = True
@@ -72,6 +79,7 @@ def originalObligations():
     has_ast0 = not checkObligation(og, ast_obl)
     print("T0: Assertive obligation (!O[a cstit: [a dstit: !(!g U p)]]) = ",
           str(has_ast0))
+    assert has_ast0
 
     agg_obl = Obligation(" [! (name=4) U (name=6 | name=9)]", False,
                          True)
@@ -81,16 +89,17 @@ def originalObligations():
     has_agg0 = not checkObligation(og, agg_obl)
     print("T0: Aggressive obligation (!O[a cstit: ![a dstit: (!g U p)]]) = ",
           str(has_agg0))
+    assert not has_agg0
 
 
-def modifiedObligations(safe=True, verbose=False):
+def setupAuto(safe=True):
     graph3 = Graph(n=13, edges=[(0, 1), (1, 2), (2, 2), (1, 3), (3, 2), (3, 2),
                                 (3, 4), (4, 4), (4, 5), (4, 9), (5, 4), (5, 9),
                                 (5, 12), (12, 12), (3, 6), (6, 6), (6, 7),
                                 (7, 6), (6, 9), (9, 10), (10, 11), (11, 11)],
                    directed=True)
 
-    if(safe):
+    if safe:
         # not assertive, not aggressive, safe:
         graph3.es["weight"] = [5, 1, 0, 5, 1, 1, 1, 5, 5, 5, 14, 5, 0, 0, 2, 5,
                                5, 5, 0, 10, 10, 5]
@@ -109,6 +118,11 @@ def modifiedObligations(safe=True, verbose=False):
           14: [20], 15: [21]}
 
     g3 = Automaton(graph3, k3)
+    return g3
+
+
+def modifiedObligations(safe=True, verbose=False):
+    g3 = setupAuto(safe)
     col_mission3 = g3.checkCTL("temp.smv", "EG !(name = 12)")
     print("T3: Collision mission (EG !collision) = ", str(col_mission3))
 
@@ -153,7 +167,41 @@ def modifiedObligations(safe=True, verbose=False):
     print("T3: Aggressive obligation (!O[a cstit: ![a dstit: (!g U p)]]) = ",
           str(has_agg3))
 
+    if safe:
+        assert col_mission3
+        assert exit_mission3
+        assert hwy_mission3
+        assert has_safe3
+        assert not has_fast3
+        assert not has_ast3
+        assert not has_agg3
+
+
+def enumeration():
+    g3 = setupAuto()
+    g3.q0 = 3
+    atoms = []
+    # for t in range(7):
+    #     atoms.append("c<="+str(t))
+    for s in range(13):
+        atoms.append("(name="+str(s)+")")
+    db, vdb = enum(g3, 3, 7, atoms)
+    best = []
+    for l, phi_l in enumerate(db):
+        best_score = 2
+        best_phi_l = []
+        for i, phi in enumerate(phi_l):
+            score = vdb[l][i]
+            if score == best_score:
+                best_phi_l.append((phi, score))
+            elif score < best_score:
+                best_phi_l = [(phi, score)]
+                best_score = score
+        best.append(best_phi_l)
+    print(best)
+
 
 if __name__ == "__main__":
     # originalObligations()
-    modifiedObligations(verbose=True)
+    # modifiedObligations(verbose=True)
+    enumeration()

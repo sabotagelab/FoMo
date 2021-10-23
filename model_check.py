@@ -12,8 +12,10 @@ from copy import deepcopy
 from igraph import *
 from random_weighted_automaton import *
 
+
 # TODO: refactor checkObligation, checkConditional, and generateFragments as Automaton class functions
 # ^ the Obligation class could have validatedBy(Automaton)
+# ^ also add a get_optimal_actions function to Automaton that returns the optimal actions
 
 class Automaton(object):
     def __init__(self, graph, actions, q0=0):
@@ -41,7 +43,6 @@ class Automaton(object):
                 edge = graph.es[edge]
                 edge["action"] = action
 
-
     def k(self, i):
         """
         get all actions available from vertex i.
@@ -57,7 +58,6 @@ class Automaton(object):
                 actions.append(action)
         return actions
 
-
     def setCounter(self, var_name='c', start=0, term=1000):
         """
         create a simple counter in this automaton
@@ -68,7 +68,6 @@ class Automaton(object):
         :return:
         """
         self.counter = (var_name, start, term)
-
 
     def forceKn(self, kn, source=0):
         """
@@ -87,7 +86,6 @@ class Automaton(object):
         self.graph.delete_edges(selections)
         return self
 
-
     def forceQn(self, qn, source=0):
         """
         delete all edges from source vertex with edges that do not lead to given
@@ -105,7 +103,6 @@ class Automaton(object):
         self.graph.delete_edges(selections)
         return self
 
-
     def union(self, g, target=0):
         """
         modify this automaton such that transitions in itself to its initial
@@ -119,7 +116,8 @@ class Automaton(object):
         v_mod = self.graph.vcount() + target % g.graph.vcount()
 
         # find the transitions to the initial state not from previous state
-        es = self.graph.es.select(_target=target, _source_notin=self.q_previous)
+        # es = self.graph.es.select(_target=target, _source_notin=self.q_previous)
+        es = self.graph.es.select(_target=target)
         # if no
         if not es:
             return self
@@ -149,7 +147,6 @@ class Automaton(object):
 
         return self
 
-
     def optimal(self, discount, best=True, punish=-1000, steps=100):
         mod = 1
         if not best:
@@ -158,7 +155,6 @@ class Automaton(object):
         sol = mdp.FiniteHorizon(tr[0], tr[1], discount, N=steps)
         sol.run()
         return sol.V[self.q0] * mod
-
 
     def to_mdp(self, best=True, punish=-1000):
         """
@@ -232,7 +228,6 @@ class Automaton(object):
             # ... change the reward corresponding to actually taking the edge.
             r[i, tup[0], tup[1]] = edge["weight"] * mod
         return (t, r)
-
 
     def checkCTL(self, file, x, verbose=False):
         """
@@ -317,7 +312,6 @@ class Automaton(object):
         states = sep.join(states)
         f.write("VAR state: {" + states + "};\n\n")
 
-
     def _writeNames(self, f):
         sep = ', '
         # since multiple states can be associated with the same state of a
@@ -329,7 +323,6 @@ class Automaton(object):
         # add names variable to model
         names = sep.join(names)
         f.write("VAR name: {" + names + "};\n\n")
-
 
     def _writeStateTrans(self, f):
         sep = ', '
@@ -354,7 +347,6 @@ class Automaton(object):
         f.write("  esac;\n")
         f.write("\n")
 
-
     def _writeNameTrans(self, f):
         # set initial name
         init_name = self.graph.vs["name"][self.q0]
@@ -375,7 +367,6 @@ class Automaton(object):
         f.write("  esac;\n")
         f.write("\n")
 
-
     def _writeVars(self, f):
         # if auto has a counter
         if self.counter:
@@ -383,8 +374,7 @@ class Automaton(object):
             name = str(self.counter[0])
             start = str(self.counter[1])
             end = str(self.counter[2])
-            f.write("VAR " + name + " : " + start + " .. " + end +";\n\n")
-
+            f.write("VAR " + name + " : " + start + " .. " + end + ";\n\n")
 
     def _writePropTrans(self, f):
         # if auto has a counter
@@ -393,7 +383,7 @@ class Automaton(object):
             c = str(self.counter[0])
             t = str(self.counter[2])
             f.write(" init(" + c + ") := " + str(self.counter[1]) + ";\n")
-            f.write(" next(" + c + ") := ("+ c + "<" + t +")?(" + c + "+1):(" +
+            f.write(" next(" + c + ") := (" + c + "<" + t + ")?(" + c + "+1):(" +
                     c + ");\n\n")
 
 
@@ -401,6 +391,7 @@ class Obligation(object):
     """
     Contains an obligation in Dominance Act Utilitarian deontic logic
     """
+
     def __init__(self, phi, is_ctls, is_neg):
         """
         Creates an Obligation object
@@ -458,7 +449,6 @@ class Obligation(object):
         return self.phi
 
 
-
 def checkObligation(g, a, verbose=False):
     """
     Check an automaton for if it has a given obligation.
@@ -481,49 +471,10 @@ def checkConditional(g, a, x, t, verbose=False):
     :param a:
     :param x:
     :param t:
+    :param verbose:
     :return:
     """
-    root = g.q0
-    choices = g.k(root)
-    intervals = []
-    gnps = []
-    cond_choices = []
-    l = len(choices)
-    # for each choice available from start...
-    for n in np.arange(l):
-        kn = choices[n]
-        gn = deepcopy(g)
-        gn = gn.forceKn(kn, source=root)
-        gnr = deepcopy(gn)
-        gnp = gnr.union(g, target=root)
-        # get a list of automata whose first action is kn, and have one history
-        # up to depth t, and that history satisfies X, and after that it behaves
-        # like g
-        gns = generateFragments(gnp, g, root, x, t)
-        lows = []
-        highs = []
-        if gns:
-            for gf in gns:
-                lows.append(gf.optimal(0.5, best=False))
-                highs.append(gf.optimal(0.5, best=True))
-            interval = [np.max(lows), np.max(highs)]
-            intervals.append(interval)
-            gnps.append(gnp)
-            cond_choices.append(kn)
-
-
-    # find all un-dominated intervals
-    # optimal carries tuples containing an optimal action and an automaton
-    # whose first action is that optimal action.
-    optimal = []
-    if not intervals:
-        return False
-    inf = np.max(np.min(intervals, axis=1))
-    for i, range in enumerate(intervals):
-        if range[1] >= inf:
-            if verbose:
-                print(cond_choices[i], range)
-            optimal.append((cond_choices[i], gnps[i]))
+    optimal = get_optimal_automata(g, t, x, verbose)
 
     for m in optimal:
         truth_n = True
@@ -531,7 +482,7 @@ def checkConditional(g, a, x, t, verbose=False):
             print(m[0])
         if a.isCTLS():
             truth_n = m[1].checkToCTL('temp.smv', a.getPhi(), a.phi_neg,
-                                   verbose=verbose)
+                                      verbose=verbose)
         elif a.isSTIT():
             phi = a.getPhi()
             if not a.isNegSTIT():
@@ -563,8 +514,131 @@ def checkConditional(g, a, x, t, verbose=False):
     return True
 
 
+# TODO: consider returning a list of dictionaries
+def get_choice_automata(g, t, x="TRUE"):
+    """
+    given an automaton g, a time horizon t, and a horizon-limited condition x, generate:
+    a list of tuples (action, act_automaton, interval); where action is an action of the
+    automaton g available at g.q0 (the starting state of g), act_automaton is the
+    automaton generated when g can only take the corresponding action from q0, and
+    interval is a list containing the highest and lowest scores of histories of length t
+    produced from the act_automaton.
 
-def generateFragments(gn, g0, q0, x, t):
+    :param g:
+    :param t:
+    :param x:
+    :return:
+    """
+    root = g.q0
+    choices = g.k(root)
+    out = []
+    l = len(choices)
+    # for each choice available from start...
+    for n in np.arange(l):
+        kn = choices[n]
+        gn = deepcopy(g)
+        gn = gn.forceKn(kn, source=root)
+        gnr = deepcopy(gn)
+        gnp = gnr.union(g, target=root)
+        # get a list of automata whose first action is kn, and have one history
+        # up to depth t, and that history satisfies X, and after that it behaves
+        # like g
+        gns = generate_fragments(gnp, g, root, x, t)
+        lows = []
+        highs = []
+        if gns:
+            for gf in gns:
+                lows.append(gf.optimal(0.5, best=False))
+                highs.append(gf.optimal(0.5, best=True))
+            interval = [np.max(lows), np.max(highs)]
+            out.append((kn, gnp, interval))
+
+    return out
+
+
+def get_choice_fragments(g, t, x="TRUE"):
+    """
+    given an automaton g, a time horizon t, and a horizon-limited condition x, generate:
+    a list of tuples (action, act_fragment); where action is an action of the
+    automaton g available at g.q0 (the starting state of g), act_fragment is the
+    fragment generated when g can only take the corresponding action from q0 and has only
+    one history up to depth t.
+
+    :param g:
+    :param t:
+    :param x:
+    :return:
+    """
+    root = g.q0
+    choices = g.k(root)
+    out = []
+    l = len(choices)
+    # for each choice available from start...
+    for n in np.arange(l):
+        kn = choices[n]
+        gn = deepcopy(g)
+        gn = gn.forceKn(kn, source=root)
+        gnr = deepcopy(gn)
+        gnp = gnr.union(g, target=root)
+        # get a list of automata whose first action is kn, and have one history
+        # up to depth t, and that history satisfies X, and after that it behaves
+        # like g
+        gns = generate_fragments(gnp, g, root, x, t)
+        if gns:
+            for gf in gns:
+                out.append((kn, gf))
+
+    return out
+
+
+def get_optimal_automata(g, t, x="TRUE", verbose=False):
+    """
+    given an automaton g, a time horizon t, and a horizon-limited condition x, generate:
+    a list of tuples (opt_action, opt_automaton) where opt_action is an action available
+    to g at g.q0 (the starting state of g), and opt_automaton is the automaton generated
+    when g can only take the corresponding opt_action from q0. opt_action is the
+    dominance optimal action available to g.q0.
+
+    :param g:
+    :param t:
+    :param x:
+    :param verbose:
+    :return:
+    """
+    choices = get_choice_automata(g, t, x)
+    return choose_optimal_automata(choices, verbose)
+
+
+def choose_optimal_automata(choices, verbose=False):
+    """
+    given a list of tuples (action, act_automaton, interval), generate:
+    a list of tuples (opt_action, opt_automaton) where opt_action is an action available
+    to g at g.q0 (the starting state of g), and opt_automaton is the automaton generated
+    when g can only take the corresponding opt_action from q0. opt_action is the
+    dominance optimal action available to g.q0.
+
+    :param choices:
+    :param verbose:
+    :return:
+    """
+    intervals = [choice[2] for choice in choices]
+    # find all un-dominated intervals
+    # optimal carries tuples containing an optimal action and an automaton
+    # whose first action is that optimal action.
+    optimal = []
+    if not intervals:
+        return False
+    inf = np.max(np.min(intervals, axis=1))
+    for i, interval in enumerate(intervals):
+        if interval[1] >= inf:
+            if verbose:
+                print(choices[i][0], interval)
+            optimal.append((choices[i][0], choices[i][1]))
+
+    return optimal
+
+
+def generate_fragments(gn, g0, q0, x, t):
     """
     Given an Automaton gn, a prototype Automaton g0, a starting state q0,
     a finite horizon condition x, and the length of that horizon t, generate
