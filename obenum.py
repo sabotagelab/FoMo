@@ -16,12 +16,11 @@ by Mohammadinejad, Deshmukh, Puranic, Vazquez-Chanlatte, and Donze
 # TODO: conditional obligation checking
 # ^ need to get optimal fragments w.r.t. the condition.
 
-from model_check import Automaton, checkConditional, checkObligation, get_choice_automata, get_optimal_automata, \
-    get_choice_fragments
+from model_check import get_choice_fragments, choose_optimal_automata
 from tqdm import trange, tqdm
 
 
-def enum(auto, l_max, horizon, atoms, unary_ops=[], binary_ops=[]):
+def enum(auto, l_max, horizon, atoms, condition="TRUE", unary_ops=[], binary_ops=[]):
 
     if not unary_ops:
         # set unary_ops to CTL ops
@@ -78,18 +77,18 @@ def enum(auto, l_max, horizon, atoms, unary_ops=[], binary_ops=[]):
             db.append(db_l)
             # vdb.append(vdb_l)
     # check error of all the formulas at once, this way we generate fragments once
-    vdb = error(db, auto, horizon)
+    vdb = error(db, auto, horizon, condition)
     return db, vdb
 
 
 # TODO: check error at the end? Checking each formula as it's created is super expensive.
 # TODO: break error into chunks so I *can* check error for just one formula
 # ^ inner function should take the fragments as parameters
-def error(db, auto, horizon):
+def error(db, auto, horizon, condition="TRUE"):
     # get all the fragments
-    frags = get_choice_fragments(auto, horizon)
+    frags = get_choice_fragments(auto, horizon, condition)
     # get just the optimal action fragments
-    optimal = get_optimal_automata(auto, horizon)
+    optimal = choose_optimal_automata(frags)
     optimal_actions = [opt[0] for opt in optimal]
     vdb = []
 
@@ -132,5 +131,4 @@ def error(db, auto, horizon):
 
 
 if __name__ == "__main__":
-    db, vdb = enum(None, 5, ['A', 'B', 'C', 'D', 'E'])
-    print(db)
+    pass
