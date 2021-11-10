@@ -7,13 +7,15 @@ Created July 2020
 from random_weighted_automaton import *
 from model_check import *
 from obenum import enum
+import igraph as ig
+import numpy as np
 import pickle
 
 
 def simpleExperiment():
     graph = pickle.load(open("example.pkl", "rb"))
     k = {0: [3], 1: [0], 2: [6], 3: [1, 4], 4: [7, 5], 5: [2]}
-    g = Automaton(graph, k)
+    g = Automaton.with_actions(graph, k)
     kn = 1
     gn = deepcopy(g)
     gn = gn.forceKn(kn)
@@ -39,7 +41,7 @@ def originalObligations():
                             0, 0, 0, 0]
     k0 = {0: [0, 13], 1: [1, 2, 14], 2: [3, 4, 15], 3: [6, 7, 16], 4: [8, 17],
           5: [10, 18], 6: [11, 19], 7: [12, 20], 8: [9], 9: [5]}
-    og = Automaton(ograph1, k0)
+    og = Automaton.with_actions(ograph1, k0)
 
     col_mission0 = og.checkCTL("temp.smv", "EG !(name = 9)")
     print("T0: Collision mission (EG !collision) = ", str(col_mission0))
@@ -115,10 +117,25 @@ def setupAuto(safe=True):
 
     k3 = {0: [0], 1: [1, 3], 2: [2], 3: [4, 6], 5: [7, 8], 6: [10], 7: [11, 12],
           8: [13], 9: [14, 5], 10: [15, 16], 11: [17], 12: [18], 13: [19],
-          14: [20], 15: [21]}
+          14: [20], 15: [21], 16: [9]}
 
-    g3 = Automaton(graph3, k3)
+    g3 = Automaton.with_actions(graph3, k3)
     return g3
+
+
+def setupTest(test_no=0):
+    if test_no == 0:
+        graph = Graph(n=3, edges=[(0, 1), (1, 2), (2, 2)], directed=True)
+        graph.es["weight"] = [1, 1, 1]
+        k = {0: [0], 1: [1], 2: [2]}
+        auto = Automaton.with_actions(graph, k)
+        return auto
+    else:
+        graph = Graph(n=4, edges=[(0, 1), (1, 2), (1, 3), (2, 3), (3, 2), (3, 3)], directed=True)
+        graph.es["weight"] = [1, 1, 1, 1, 1, 1]
+        k = {0: [0], 1: [1, 2], 2: [3], 3: [4, 5]}
+        auto = Automaton.with_actions(graph, k)
+        return auto
 
 
 def modifiedObligations(safe=True, verbose=False):
@@ -201,7 +218,65 @@ def enumeration():
     print(best)
 
 
+def setupGridworld():
+    return Automaton.as_gridworld(4, 3, cells=[("goal", [(3, 2)], 10, True, True),
+                                             ("pit", [(3, 1)], -50, True, True),
+                                             ("wall", [(1, 1)], -1, False, False)])
+
+
+def test_fragments():
+    gt = setupAuto()
+    frags = generate_fragments(gt, gt, gt.q0, "EF (name=12)", t=7)
+    assert len(frags) == 12
+
+    gw = setupGridworld()
+    frags = generate_fragments(gw, gw, gw.q0, "TRUE", t=1)
+    assert len(frags) == 12
+
+
+def test_gridworld():
+    gw = setupGridworld()
+    # plot(gw.graph)
+    frags = generate_fragments(gw, gw, gw.q0, "EX (name = 0 | name = 1)", t=2)
+    for frag in frags:
+        # plot(frag.graph, layout=frag.graph.layout_fruchterman_reingold())
+        pass
+    tree = build_fragment_tree(frags, gw)
+    # plot(tree.graph, layout=tree.graph.layout_fruchterman_reingold())
+    actions = ["up", "down", "left", "right"]
+    for v in tree.graph.vs:
+        for action in actions:
+            act_es = tree.graph.es.select(_source=v, action=action)
+            act_prob = sum(act_es["prob"])
+            np.testing.assert_allclose(act_prob, 1)
+    pass
+
+
+def enum_gridworld():
+    gw = setupGridworld()
+    atoms = []
+    for s in range(12):
+        atoms.append("(name="+str(s)+")")
+    # horizon of 5 is probably gonna fry my computer, but we'll see...
+    db, vdb = enum(gw, 3, 5, atoms)
+    best = []
+    for l, phi_l in enumerate(db):
+        best_score = 2
+        best_phi_l = []
+        for i, phi in enumerate(phi_l):
+            score = vdb[l][i]
+            if score == best_score:
+                best_phi_l.append((phi, score))
+            elif score < best_score:
+                best_phi_l = [(phi, score)]
+                best_score = score
+        best.append(best_phi_l)
+    print(best)
+
+
 if __name__ == "__main__":
     # originalObligations()
-    # modifiedObligations(verbose=True)
-    enumeration()
+    # modifiedObligations(verbose=False)
+    # enumeration()
+    # test_fragments()
+    test_gridworld()

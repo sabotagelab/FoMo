@@ -9,6 +9,7 @@ import subprocess
 import numpy as np
 import mdptoolbox.mdp as mdp
 from copy import deepcopy
+from itertools import product
 from igraph import *
 from random_weighted_automaton import *
 
@@ -16,32 +17,212 @@ from random_weighted_automaton import *
 # TODO: refactor checkObligation, checkConditional, and generateFragments as Automaton class functions
 # ^ the Obligation class could have validatedBy(Automaton)
 # ^ also add a get_optimal_actions function to Automaton that returns the optimal actions
-
+# TODO: asserts on the construction logic so malformed automata aren't constructed
+# TODO: constructor that takes a list of "action classes" and associated probabilities
+# ^ maybe even a gridworld constructor
+# TODO: separate function of 'label', 'name' and atomic propositions
+# ^ allow multiple propositions on a given vertex, and be able to check them.
+# TODO: refactor lots of the functions just to simplify them
 class Automaton(object):
-    def __init__(self, graph, actions, q0=0):
+    def __init__(self, graph, initial_state):
         """
-        graph is an igraph graph object
+        Create a new Automaton object from an igraph graph object and an initial state.
+        The graph should have vertex properties "label" and "name".
+        The graph should have the edge properties "action" and "weight.
+        The graph may optionally have the edge property "prob".
+        The initial_state parameter should the id of a vertex in graph.
+        Adds a "delete" property to the edges; if edge["delete"] = 1, then it is marked for deletion later.
+
+        :param graph:
+        :param initial_state:
+        """
+        self.graph = graph
+        self.graph.es["delete"] = [0]*self.graph.ecount()
+        self.q0 = initial_state
+
+        self.qn = self.q0
+        self.t = 0
+        self.q_previous = []
+        self.t_previous = []
+        self.num_clones = 0
+        self.counter = False
+        self.prob = "prob" in self.graph.es.attribute_names()
+
+    @classmethod
+    def with_actions(cls, graph, actions, q0=0, probs=None):
+        """
+        graph is a directed igraph graph object
         actions is a dictionary that maps edges to actions
         key(action), values(list of edges)
-        e.g. {0:[0, 1, 3], 1:[2, 4], 2:[5], ... }.
+        e.g. {0:[0, 1, 3], 1:[2, 4], 2:[5], ... }
+        probs is a list of probabilities such that probs[k] is the
+        probability of following edge[k] when the action containing
+        edge[k] is taken.
 
         :param graph:
         :param actions:
         :param q0:
+        :param probs:
         """
 
-        self.graph = graph
-        self.graph.vs["label"] = [str(v.index) for v in self.graph.vs]
-        self.graph.vs["name"] = [str(v.index) for v in self.graph.vs]
-        self.num_clones = 0
-        self.q0 = q0
-        self.qn = q0
-        self.q_previous = []
-        self.counter = False
+        state_names = [str(v.index) for v in graph.vs]
+        graph.vs["name"] = state_names
+        graph.vs["label"] = state_names
         for action in actions:
             for edge in actions[action]:
                 edge = graph.es[edge]
                 edge["action"] = action
+
+        if probs:
+            graph.es["prob"] = probs
+        return cls(graph, q0)
+
+    # TODO: make a gridworld cell class?
+    @classmethod
+    def as_gridworld(cls, x_len, y_len, start=(0, 0), action_success=0.7, cells=None, default_reward=-1):
+        """
+        Construct an automaton for an x_len-by-y_len gridworld, starting from the 'start' position, with actions up,
+        down, left, and right.
+        Each action, when taken, has a 'action_success' chance of effecting. Otherwise, another action is effected with
+        probability (1-action_success)/3. That is, by default, the 'up' action has a probability of 0.7 to transition
+        the automaton from (0,0) to (0,1). Taking the 'up' action has a probability of 0.1 to move the automaton down.
+        Because (0,0) is in a corner, however, moving down leaves the automaton in its same state.
+
+        The cells parameter is a list of tuples [(type, positions, reward, absorbing, accessible), ...].
+        Each tuple represents one class of cells in the gridworld, relays the positions of those cells, the reward
+        received for entering those cells, whether or not those cells can be exited, and whether or not those cells can
+        be entered.
+        The 'type' entry in the tuple is a string that denotes the class of cell; e.g. "goal", "pit", or "wall".
+        The 'positions' entry is a list of 2-tuples (x, y) that denotes the locations of the cells of the given type in
+        this gridworld. E.g. [(0,0), (2,2), (1,3)].
+        The 'reward' entry is a real value that denotes the reward for entering a cell of the given type; e.g. 10.7.
+        The 'absorbing' entry is a boolean value that denotes if cells of the given type are absorbing states.
+        The 'accessible' entry is a boolean value that denotes if cells of the given type can be entered.
+        If cells is left as None, then no cells are specified, and all cells are accessible, non-absorbing, and have a
+        reward of 'default_reward'.
+        An example cells input for a basic 4x3 gridworld is as follows:
+        cells=[("goal", [(3, 2)], 10, True, True),
+               ("pit", [(2, 2)], -50, True, True),
+               ("wall", [(1, 1)], -1, False, False)]
+        This places a goal in the upper-right of the grid with reward 10, and is an absorbing state,
+        a pit just below the goal with a reward of -50, and is an absorbing state,
+        and a wall just north-east of the starting position that is inaccessible. Note that because the wall is
+        not accessible, its 'reward' and 'absorbing' entries are irrelevant.
+
+        If a cell is not included among the positions in the 'cells' parameter, its type is "default", it is accessible,
+        and not absorbing, and the reward for entering it is 'default_reward'.
+
+        :param x_len:
+        :param y_len:
+        :param start:
+        :param action_success:
+        :param default_reward:
+        :param cells:
+        """
+        n = x_len * y_len
+        g_new = Graph(directed=True)
+        pos_to_type = {}
+        type_to_spec = {}
+        default_spec = ("default", [], default_reward, False, True)
+        # cache information about cell positions and types for future use
+        for spec in cells:
+            cell_type = spec[0]
+            type_to_spec[cell_type] = spec
+            cell_poss = spec[1]
+            for cell_pos in cell_poss:
+                pos_to_type[cell_pos] = cell_type
+
+        positions = product(range(x_len), range(y_len))
+        # set up the attribute dictionary so all vertices can be added in one go
+        v_attr_dict = {"x": [], "y": [], "pos": [], "label": [], "name": [], "type": [],
+                       "absorbing": [], "accessible": [], "reward": []}
+        k = 0
+        for x, y in positions:
+            v_attr_dict["x"].append(x)
+            v_attr_dict["y"].append(y)
+            v_attr_dict["pos"].append((x, y))
+            v_attr_dict["label"].append(str((x, y)))
+            v_attr_dict["name"].append(str(k))
+            cell_type = pos_to_type.get((x, y), "default")
+            cell_spec = type_to_spec.get(cell_type, default_spec)
+            v_attr_dict["type"].append(cell_type)
+            v_attr_dict["reward"].append(cell_spec[2])
+            v_attr_dict["absorbing"].append(cell_spec[3])
+            v_attr_dict["accessible"].append(cell_spec[4])
+            k += 1
+        # add a vertex for every position, and set its attributes
+        g_new.add_vertices(n, attributes=v_attr_dict)
+
+        # set the four actions and the effect of actually following that action
+        actions = ["up", "down", "left", "right"]
+        effects = [(0, 1), (0, -1), (-1, 0), (1, 0)]
+        # define the probability that an effect is effected in the case that the effect is not the assumed consequence
+        # of a taken action
+        off_prob = (1.0 - action_success)/3.0
+        # set up attribute dictionary and edge list so all edges can be added in one go
+        edge_tuples = []
+        signatures = []
+        e_attr_dict = {"action": [], "weight": [], "prob": []}
+        # for each vertex...
+        for v in g_new.vs:
+            effect_targets = []
+            # if that vertex is inaccessible
+            if not v["accessible"]:
+                # just add a self edge for consistency reasons
+                effect_targets = [v] * len(effects)
+            elif v["absorbing"]:
+                # if it's absorbing, set the target of each effect to itself
+                effect_targets = [v] * len(effects)
+            else:
+                # otherwise, for each effect...
+                for effect in effects:
+                    # get the x and y positions that the automaton would enter under that effect
+                    next_x = v["x"] + effect[0]
+                    next_y = v["y"] + effect[1]
+                    # if those x and y positions are inside the bounds...
+                    if 0 <= next_x < x_len and 0 <= next_y < y_len:
+                        # get the target of the effect...
+                        next_v = g_new.vs.find(pos=(next_x, next_y))
+                        # if the target isn't accessible...
+                        if not next_v["accessible"]:
+                            # then the effect leads to the same state
+                            next_v = v
+                    else:
+                        # the target of the effect is out of bounds, so the effect would lead to the same state
+                        next_v = v
+                    # record the target of each effect
+                    effect_targets.append(next_v)
+
+            # for each action that can be taken...
+            for i, action in enumerate(actions):
+                # for each effect that action can have...
+                for j, effect in enumerate(effects):
+                    # get the target of this effect
+                    next_v = effect_targets[j]
+                    signature = (v.index, next_v.index, action)
+                    # in the case that the effect matches the action taken...
+                    if i == j:
+                        # the probability of this effect is the action_success probability
+                        prob = action_success
+                    else:
+                        # otherwise, the probability of this effect is the off_prob probability
+                        prob = off_prob
+
+                    if signature not in signatures:
+                        signatures.append(signature)
+                        # record an edge from v to next_v
+                        edge_tuples.append((v.index, next_v.index))
+                        # record the attributes of this edge
+                        e_attr_dict["action"].append(action)
+                        e_attr_dict["weight"].append(next_v["reward"])
+                        e_attr_dict["prob"].append(prob)
+                    else:
+                        sig_index = signatures.index(signature)
+                        e_attr_dict["prob"][sig_index] += prob
+        # add an edge for each (vertex*action*effect), with associated attributes
+        g_new.add_edges(edge_tuples, e_attr_dict)
+        v_0 = g_new.vs.find(pos=start)
+        return cls(g_new, v_0.index)
 
     def k(self, i):
         """
@@ -86,6 +267,30 @@ class Automaton(object):
         self.graph.delete_edges(selections)
         return self
 
+    def forceEn(self, en, source=0):
+        """
+        delete all edges from source vertex that are not
+        themselves in en.
+
+        :param en:
+        :param source:
+        :return:
+        """
+        # find all edges with this source.
+        # when an index is deleted, the indices change
+        # so I need to delete all edges at once
+        # I can't query the edge indices here, so I'll give the edges temporary names
+        # and grab the ones with names different from en
+        candidates = self.graph.es.select(_source=source)
+        for edge in candidates:
+            if edge.index != en.index:
+                edge["delete"] = 1
+            else:
+                edge["delete"] = 0
+        candidates = candidates.select(delete=1)
+        self.graph.delete_edges(candidates)
+        return self
+
     def forceQn(self, qn, source=0):
         """
         delete all edges from source vertex with edges that do not lead to given
@@ -105,7 +310,7 @@ class Automaton(object):
 
     def union(self, g, target=0):
         """
-        modify this automaton such that transitions in itself to its initial
+        modify this automaton such that transitions in itself to the target
         state are replaced with transitions to automaton g.
 
         :param g:
@@ -115,9 +320,12 @@ class Automaton(object):
         # recall certain properties of the given graphs
         v_mod = self.graph.vcount() + target % g.graph.vcount()
 
-        # find the transitions to the initial state not from previous state
-        # es = self.graph.es.select(_target=target, _source_notin=self.q_previous)
-        es = self.graph.es.select(_target=target)
+        # find the transitions to the target state not from previous state
+        if len(self.q_previous) > 0:
+            # es = self.graph.es.select(_target=target, _source_notin=[self.q_previous[-1]])
+            es = self.graph.es.select(_target=target)
+        else:
+            es = None
         # if no
         if not es:
             return self
@@ -129,6 +337,10 @@ class Automaton(object):
         names = self.graph.vs["name"] + g.graph.vs["name"]
         weights = self.graph.es["weight"] + g.graph.es["weight"]
         actions = self.graph.es["action"] + g.graph.es["action"]
+        if self.prob:
+            probs = self.graph.es["prob"] + g.graph.es["prob"]
+        else:
+            probs = None
         # take the disjoint union of this graph and the given graph
         self.graph = self.graph.disjoint_union(g.graph)
         # reinstate edge and vertex attributes
@@ -136,14 +348,23 @@ class Automaton(object):
         self.graph.vs["name"] = names
         self.graph.es["weight"] = weights
         self.graph.es["action"] = actions
-        properties = [(e.source, e["action"], e["weight"]) for e in es]
+        if probs:
+            self.graph.es["prob"] = probs
+        # properties = [(e.source, e["action"], e["weight"]) for e in es]
         # for each edge, make a replacement edge to new graph
         for edge in es:
             new_edge = self.graph.add_edge(edge.source, self.graph.vs[v_mod])
             new_edge["action"] = edge["action"]
             new_edge["weight"] = edge["weight"]
+            if probs:
+                new_edge["prob"] = edge["prob"]
         # delete the edges
-        self.graph.delete_edges(_target=target, _source_notin=self.q_previous)
+        if len(self.q_previous) > 0:
+            # self.graph.delete_edges(_target=target, _source_notin=[self.q_previous[-1]])
+            self.graph.delete_edges(_target=target)
+            # self.graph.delete_vertices(VertexSeq(self.graph, target))
+        else:
+            self.graph.delete_edges(_target=target)
 
         return self
 
@@ -152,7 +373,7 @@ class Automaton(object):
         if not best:
             mod = -1
         tr = self.to_mdp(best, punish)
-        sol = mdp.FiniteHorizon(tr[0], tr[1], discount, N=steps)
+        sol = mdp.ValueIteration(tr[0], tr[1], discount)
         sol.run()
         return sol.V[self.q0] * mod
 
@@ -160,10 +381,8 @@ class Automaton(object):
         """
         solve graph as MDP for most (or least) optimal strategy and return value
 
-        :param discount:
         :param best:
         :param punish:
-        :param steps:
         :return:
         """
         vcount = self.graph.vcount()
@@ -173,7 +392,8 @@ class Automaton(object):
         # transition, and every state is represented by a vertex.
         # The matrix may be considered, along the "action" vertex, as specifying
         # the probability that action has of moving the process from state A
-        # to state B. As we are treating each transition as a sure thing, all
+        # to state B. As we are treating each transition as a sure thing,
+        # in the case that we are evaluating a DAU automaton, all
         # probabilities are 1. E.g. if edge 2 in the graph points from vertex 3
         # to vertex 1, then the entry t[2, 3, 1] = 1. The t matrix must be row
         # stochastic, so there must be an entry of 1 in each row; i.e. for each
@@ -185,7 +405,6 @@ class Automaton(object):
         # for each edge-state pair. Due to this discrepancy in representations,
         # the only reasonable choice is to say that trying to take edges that do
         # not begin from the current vertex leaves you in the current vertex.
-        t = np.zeros((ecount, vcount, vcount))
         # Letting the process "wait" by "taking" an edge not connected to the
         # current state can be problematic when there are negative weights.
         # If there are negative weights, the MDP seems to want to wait unless
@@ -204,29 +423,52 @@ class Automaton(object):
         # a valid weight, or the punish value). Rewards associated with elements
         # of t where the transition probability is 0 may also be set to 0 if we
         # want to switch to sparse matrix representations.
-        r = np.full((ecount, vcount, vcount), punish)
+        if self.prob:
+            actions = set(self.graph.es.get_attribute_values("action"))
+            t = np.zeros((len(actions), vcount, vcount))
+            r = np.full((len(actions), vcount, vcount), punish)
+        else:
+            t = np.zeros((ecount, vcount, vcount))
+            r = np.full((ecount, vcount, vcount), punish)
         # mod negates the weights of the system if we're looking for the worst
         # possible execution (except punishment weights, otherwise the system
         # would do nothing at all).
         mod = 1
         if not best:
             mod = -1
-        # This loop iterates through the edges in the graph so each transition
-        # matrix can be provided for every edge.
-        # for each edge...
-        for i, edge in enumerate(self.graph.es):
-            tup = edge.tuple
-            # ... for each vertex considered as source...
-            for j in range(vcount):
-                # ... if this vertex actually is the source of this edge...
-                if j == tup[0]:
-                    # ... the transition probability from source to target is 1
-                    t[i, tup[0], tup[1]] = 1
-                else:
-                    # ... otherwise, taking this edge is a "wait" action.
-                    t[i, j, j] = 1
-            # ... change the reward corresponding to actually taking the edge.
-            r[i, tup[0], tup[1]] = edge["weight"] * mod
+
+        if self.prob:
+            # we're dealing with an actual MDP! Construct the mdp differently
+            # start by getting a list of all actions
+            actions = set(self.graph.es.get_attribute_values("action"))
+            # for each action...
+            for i, action in enumerate(actions):
+                # find the edges that are in that action
+                edges = self.graph.es.select(action_eq=action)
+                # for each such edge...
+                for j, edge in enumerate(edges):
+                    tup = edge.tuple
+                    # set the transition probability for action i for this edge to its prob
+                    t[i, tup[0], tup[1]] = edge["prob"]
+                    r[i, tup[0], tup[1]] = edge["weight"] * mod
+
+        else:
+            # This loop iterates through the edges in the graph so each transition
+            # matrix can be provided for every edge.
+            # for each edge...
+            for i, edge in enumerate(self.graph.es):
+                tup = edge.tuple
+                # ... for each vertex considered as source...
+                for j in range(vcount):
+                    # ... if this vertex actually is the source of this edge...
+                    if j == tup[0]:
+                        # ... the transition probability from source to target is 1
+                        t[i, tup[0], tup[1]] = 1
+                    else:
+                        # ... otherwise, taking this edge is a "wait" action.
+                        t[i, j, j] = 1
+                # ... change the reward corresponding to actually taking the edge.
+                r[i, tup[0], tup[1]] = edge["weight"] * mod
         return (t, r)
 
     def checkCTL(self, file, x, verbose=False):
@@ -334,13 +576,13 @@ class Automaton(object):
         # for each vertex...
         for v in self.graph.vs:
             # ... get a string representation of all the vertex's successors
-            next = [str(vx.index) for vx in v.neighbors(mode=OUT)]
+            next_v = [str(vx.index) for vx in v.neighbors(mode=OUT)]
             # and a string rep of this vertex
             state = str(v.index)
             # and write out the transitions to the case
-            if next:
-                next = sep.join(next)
-                f.write("   state = " + state + " : {" + next + "};\n")
+            if next_v:
+                next_v = sep.join(next_v)
+                f.write("   state = " + state + " : {" + next_v + "};\n")
 
         # default case
         f.write("   TRUE : state;\n")
@@ -357,11 +599,11 @@ class Automaton(object):
         # for each vertex...
         for v in self.graph.vs:
             # ... get that vertex's name
-            name = v["name"]
+            v_name = v["name"]
             # and a string rep of this vertex
             state = str(v.index)
             # and write out the transitions to the case based on next state
-            f.write("   next(state) = " + state + " : " + name + ";\n")
+            f.write("   next(state) = " + state + " : " + v_name + ";\n")
         # default case
         f.write("   TRUE : name;\n")
         f.write("  esac;\n")
@@ -371,10 +613,10 @@ class Automaton(object):
         # if auto has a counter
         if self.counter:
             # ... then write the counter var
-            name = str(self.counter[0])
+            c_name = str(self.counter[0])
             start = str(self.counter[1])
             end = str(self.counter[2])
-            f.write("VAR " + name + " : " + start + " .. " + end + ";\n\n")
+            f.write("VAR " + c_name + " : " + start + " .. " + end + ";\n\n")
 
     def _writePropTrans(self, f):
         # if auto has a counter
@@ -515,6 +757,7 @@ def checkConditional(g, a, x, t, verbose=False):
 
 
 # TODO: consider returning a list of dictionaries
+# TODO: easier evaluation of automaton value when x="TRUE", so use that case
 def get_choice_automata(g, t, x="TRUE"):
     """
     given an automaton g, a time horizon t, and a horizon-limited condition x, generate:
@@ -533,25 +776,36 @@ def get_choice_automata(g, t, x="TRUE"):
     choices = g.k(root)
     out = []
     l = len(choices)
+    discount = 0.5
     # for each choice available from start...
     for n in np.arange(l):
         kn = choices[n]
         gn = deepcopy(g)
         gn = gn.forceKn(kn, source=root)
         gnr = deepcopy(gn)
+        gnr.q_previous.append(-1)
         gnp = gnr.union(g, target=root)
         # get a list of automata whose first action is kn, and have one history
         # up to depth t, and that history satisfies X, and after that it behaves
         # like g
+        if t <= 0:
+            t += 1
         gns = generate_fragments(gnp, g, root, x, t)
         lows = []
         highs = []
         if gns:
-            for gf in gns:
-                lows.append(gf.optimal(0.5, best=False))
-                highs.append(gf.optimal(0.5, best=True))
-            interval = [np.max(lows), np.max(highs)]
-            out.append((kn, gnp, interval))
+            # there are condition-satisfying histories, so gnp is in choice/|x|
+            if g.prob:
+                # we're dealing with a probabilistic automaton, get the conditional automaton
+                cond_auto = build_fragment_tree(gns, g)
+                q_of_kn = cond_auto.optimal(discount)
+                out.append((kn, gnp, q_of_kn))
+            else:
+                for gf in gns:
+                    lows.append(gf.optimal(discount, best=False))
+                    highs.append(gf.optimal(discount, best=True))
+                interval = [np.max(lows), np.max(highs)]
+                out.append((kn, gnp, interval))
 
     return out
 
@@ -579,10 +833,13 @@ def get_choice_fragments(g, t, x="TRUE"):
         gn = deepcopy(g)
         gn = gn.forceKn(kn, source=root)
         gnr = deepcopy(gn)
+        gnr.q_previous.append(-1)
         gnp = gnr.union(g, target=root)
         # get a list of automata whose first action is kn, and have one history
         # up to depth t, and that history satisfies X, and after that it behaves
         # like g
+        if t <= 0:
+            t += 1
         gns = generate_fragments(gnp, g, root, x, t)
         if gns:
             for gf in gns:
@@ -665,34 +922,192 @@ def generate_fragments(gn, g0, q0, x, t):
     # initialize the list of systems with the given system
     systems = [g]
     # until we reach the given horizon...
-    for i in range(t):
+    for i in trange(t):
         new_systems = []
         # ... for every system we have so far...
         for system in systems:
-            # ... get each possible next state for that system...
-            possible_states = system.graph.neighbors(system.qn, mode=OUT)
-            # ... and for each possible state...
-            for state in possible_states:
+            # ... get each possible transition for that system from its current state...
+            possible_edges = system.graph.es.select(_source=system.qn)
+            # ... and for each possible transition...
+            for edge in possible_edges:
+                state = edge.tuple[1]
                 # copy the system
                 sys_n = deepcopy(system)
-                # make the possible next state the only next state
-                sys_n = sys_n.forceQn(state, source=system.qn)
+                # force the transition
+                sys_n = sys_n.forceEn(edge, source=system.qn)
                 sys_n_ren = deepcopy(sys_n)
+                # update the list of previous states
+                sys_n_ren.q_previous.append(sys_n_ren.qn)
                 # tack the prototype system onto the end
-                sys_n_prime = sys_n_ren.union(g0, system.qn)
-
+                sys_n_prime = sys_n_ren.union(g0, state)
                 # if this new system satisfies the condition...
                 if sys_n_prime.checkCTL("temp.smv", f):
-                    # ... update the list of previous states
-                    sys_n_prime.q_previous.append(sys_n_prime.qn)
-                    # set the system's current state to the only possible next
-                    # state
-                    sys_n_prime.qn = state
+                    # set the system's current state to the only possible next state
+                    sys_n_prime.qn = sys_n_prime.graph.neighbors(sys_n_prime.qn, mode=OUT)[0]
                     # and add the system to our list of systems.
                     new_systems.append(sys_n_prime)
         # all systems have been stepped through, and the satisfactory systems
         # get to make it to the next round.
         systems = new_systems
     # now that all the systems in our list are deterministic to depth t
-    # the list can be returned
+    # we cut the "chaff" from each automaton, because we added a lot of superfluous states and transitions
+    # so, for each system...
+    for system in systems:
+        # find out what the identifier is for the last prototype we tacked on
+        clone_no = "-"+str(system.num_clones)
+        # get all the old vertices we want to be keeping
+        path = system.q_previous
+        path.append(system.qn)
+        # and set up a list to retain the vertices we want to delete
+        del_v_id = []
+        # then for each vertex in our graph...
+        for v in system.graph.vs:
+            # if that vertex is not one we want to keep and it's not in our last prototype tacked on...
+            if v.index not in path and clone_no not in v["label"]:
+                # add it to our delete list
+                del_v_id.append(v.index)
+        # make our delete list a proper vertex sequence so it can be deleted
+        del_vs = VertexSeq(system.graph, del_v_id)
+        # and delete those vertices! (And any associated edges)
+        system.graph.delete_vertices(del_vs)
+        # set the q0 of this pared-down system to what it should be
+        system.q0 = system.graph.vs.find(name=str(q0)).index
+        system.t = t
     return systems
+
+
+def build_fragment_tree(fragments, g0):
+    """
+    Build a tree from a given set of fragments such that each leaf of the tree is the end of one of the
+    fragments, and each leaf leads into g0 - the original automaton.
+    Return an Automaton based on the tree.
+
+    When the fragments are generated with a condition, then the tree may be considered to be a conditional
+    automaton.
+
+    :param fragments:
+    :param g0:
+    :return:
+    """
+    q0 = fragments[0].q0
+    t = fragments[0].t
+    g_new = Graph(directed=True)
+    v_new = g_new.add_vertex(name=fragments[0].graph.vs[q0]["name"])
+    # propagate other attributes of v0
+    for attr in fragments[0].graph.vs[q0].attribute_names():
+        v_new[attr] = fragments[0].graph.vs[q0][attr]
+    # track the fragments on each front of the tree
+    frag_partitions = [[fragments, q0]]
+    # track the front of the tree
+    front_vs = [q0]
+    visited = [q0]
+    prob = False
+    # for each level of the tree....
+    for _ in range(t):
+        # for each branch (starting from none)...
+        new_front = []
+        new_partitions = []
+        partition_assignment = {}
+        partition_idx = 0
+        for frag_partition, qn in frag_partitions:
+            # get each edge from this front of the tree...
+            actions = []
+            unique_edges = []
+            signatures = []
+            # for each history in this branch...
+            for fragment in frag_partition:
+                edge = fragment.graph.es.find(_source=fragment.q0)
+                # add that edge's action to the list of actions
+                actions.append(edge["action"])
+                # get that edge's action
+                target = edge.target_vertex
+                # determine the proper signature of the edge
+                if "prob" in edge.attribute_names():
+                    prob = True
+                    edge_sig = (qn, edge["action"], edge["weight"], edge["prob"], target["name"])
+                else:
+                    edge_sig = (qn, edge["action"], edge["weight"], target["name"])
+                if edge_sig not in signatures:
+                    # if we haven't seen this signature before, record it
+                    signatures.append(edge_sig)
+                    unique_edges.append(edge)
+                    # remember where we put fragments with this signature
+                    partition_assignment[edge_sig] = partition_idx
+                    # put this fragment in its partition
+                    new_partitions.append([[fragment], None])
+                    # remember where to put the next fragment with a new signature
+                    partition_idx += 1
+                else:
+                    # we've seen this signature before, so we know where to put its fragment
+                    temp_part_idx = partition_assignment[edge_sig]
+                    new_partitions[temp_part_idx][0].append(fragment)
+                # now set the fragment's q0 to its next state
+                fragment.q0 = target.index
+            # get the set of actions among those edges...
+            actions = set(actions)
+            # for each action...
+            for action in actions:
+                # get the edges in that action
+                act_es = [edge for edge in unique_edges if edge["action"] == action]
+                act_probs = []
+                if prob:
+                    act_probs = [edge["prob"] for edge in act_es]
+                for edge in act_es:
+                    # find target label
+                    target = edge.target_vertex
+                    # determine the signature of the edge
+                    if prob:
+                        edge_sig = (qn, edge["action"], edge["weight"], edge["prob"], target["name"])
+                    else:
+                        edge_sig = (qn, edge["action"], edge["weight"], target["name"])
+                    temp_part_idx = partition_assignment[edge_sig]
+                    # add it to the new graph, starting with the target
+                    v_new = g_new.add_vertex()
+                    visited.append(v_new.index)
+                    new_front.append(v_new.index)
+                    new_partitions[temp_part_idx][1] = v_new.index
+                    # copy the attributes
+                    for attr in target.attribute_names():
+                        v_new[attr] = target[attr]
+                    # now add the edge
+                    e_new = g_new.add_edge(qn, v_new)
+                    # copy the attributes
+                    for attr in edge.attribute_names():
+                        e_new[attr] = edge[attr]
+                    # normalize the probability
+                    if prob:
+                        e_new["prob"] = e_new["prob"]/np.sum(act_probs)
+        front_vs = new_front
+        frag_partitions = new_partitions
+
+    # turn the graph we've built into an automaton
+    g_new.vs["target"] = [False]*g_new.vcount()
+    g0.graph.vs["target"] = [True]*g0.graph.vcount()
+    g_new = g_new.disjoint_union(g0.graph)
+    move_edges = g_new.es.select(_target_in=front_vs)
+    mv_edg_tuples = []
+    mv_edg_attr = {}
+    for attr in move_edges.attribute_names():
+        mv_edg_attr[attr] = []
+    for move_edge in move_edges:
+        target_name = move_edge.target_vertex["name"]
+        move_target = g_new.vs.select(name=target_name, target=True)[0]
+        new_tuple = (move_edge.tuple[0], move_target.index)
+        mv_edg_tuples.append(new_tuple)
+        for attr in move_edge.attribute_names():
+            mv_edg_attr[attr].append(move_edge[attr])
+    g_new.delete_edges(move_edges)
+    g_new.add_edges(mv_edg_tuples, mv_edg_attr)
+    del_vs = VertexSeq(g_new, front_vs)
+    g_new.delete_vertices(del_vs)
+
+    cond_auto = Automaton(g_new, q0)
+    cond_auto.q_previous = visited
+    cond_auto.num_clones = t
+    # cond_auto.graph = cond_auto.graph.disjoint_union(g0.graph)
+
+    for fragment in fragments:
+        fragment.q0 = q0
+
+    return cond_auto
+

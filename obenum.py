@@ -15,8 +15,9 @@ by Mohammadinejad, Deshmukh, Puranic, Vazquez-Chanlatte, and Donze
 # ^ maybe a different set of functions? That way we can include stit statements and nested obligations
 # TODO: conditional obligation checking
 # ^ need to get optimal fragments w.r.t. the condition.
+# TODO: rename file, because we're gonna do proper searching soon
 
-from model_check import get_choice_fragments, choose_optimal_automata
+from model_check import get_choice_fragments, get_optimal_automata
 from tqdm import trange, tqdm
 
 
@@ -88,7 +89,7 @@ def error(db, auto, horizon, condition="TRUE"):
     # get all the fragments
     frags = get_choice_fragments(auto, horizon, condition)
     # get just the optimal action fragments
-    optimal = choose_optimal_automata(frags)
+    optimal = get_optimal_automata(auto, horizon, condition)
     optimal_actions = [opt[0] for opt in optimal]
     vdb = []
 
