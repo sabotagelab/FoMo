@@ -220,8 +220,13 @@ def enumeration():
 
 def setupGridworld():
     return Automaton.as_gridworld(4, 3, cells=[("goal", [(3, 2)], 10, True, True),
-                                             ("pit", [(3, 1)], -50, True, True),
-                                             ("wall", [(1, 1)], -1, False, False)])
+                                               ("pit", [(3, 1)], -50, True, True),
+                                               ("wall", [(1, 1)], -1, False, False)])
+
+def setupGridworldSmaller():
+    return Automaton.as_gridworld(3, 3, cells=[("goal", [(2, 2)], 10, True, True),
+                                               ("pit", [(2, 1)], -50, True, True),
+                                               ("wall", [(1, 1)], -1, False, False)])
 
 
 def test_fragments():
@@ -238,6 +243,8 @@ def test_gridworld():
     gw = setupGridworld()
     # plot(gw.graph)
     frags = generate_fragments(gw, gw, gw.q0, "EX (name = 0 | name = 1)", t=2)
+    # assert len(frags) == 12
+    print(len(frags))
     for frag in frags:
         # plot(frag.graph, layout=frag.graph.layout_fruchterman_reingold())
         pass
@@ -253,12 +260,13 @@ def test_gridworld():
 
 
 def enum_gridworld():
-    gw = setupGridworld()
+    gw = setupGridworldSmaller()
     atoms = []
     for s in range(12):
         atoms.append("(name="+str(s)+")")
     # horizon of 5 is probably gonna fry my computer, but we'll see...
-    db, vdb = enum(gw, 3, 5, atoms)
+    # db, vdb = enum(gw, 3, 5, atoms)
+    db, vdb = enum(gw, 3, 4, atoms, condition="EF EG (name = 10)")
     best = []
     for l, phi_l in enumerate(db):
         best_score = 2
@@ -279,4 +287,5 @@ if __name__ == "__main__":
     # modifiedObligations(verbose=False)
     # enumeration()
     # test_fragments()
-    test_gridworld()
+    # test_gridworld()
+    enum_gridworld()

@@ -17,7 +17,12 @@ by Mohammadinejad, Deshmukh, Puranic, Vazquez-Chanlatte, and Donze
 # ^ need to get optimal fragments w.r.t. the condition.
 # TODO: rename file, because we're gonna do proper searching soon
 
-from model_check import get_choice_fragments, get_optimal_automata
+# TODO: function to step through the grammar tree of a given language
+# ^ maybe not deterministically
+# TODO: function to estimate the reward for a given equation
+# TODO: function to return the best reward given db, vdb
+
+from model_check import get_choice_fragments, get_optimal_automata, get_choice_automata, choose_optimal_automata
 from tqdm import trange, tqdm
 
 
@@ -87,9 +92,9 @@ def enum(auto, l_max, horizon, atoms, condition="TRUE", unary_ops=[], binary_ops
 # ^ inner function should take the fragments as parameters
 def error(db, auto, horizon, condition="TRUE"):
     # get all the fragments
-    frags = get_choice_fragments(auto, horizon, condition)
+    choice_automata, frags = get_choice_automata(auto, horizon, condition, True)
     # get just the optimal action fragments
-    optimal = get_optimal_automata(auto, horizon, condition)
+    optimal = choose_optimal_automata(choice_automata)
     optimal_actions = [opt[0] for opt in optimal]
     vdb = []
 

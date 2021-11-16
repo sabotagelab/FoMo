@@ -758,7 +758,7 @@ def checkConditional(g, a, x, t, verbose=False):
 
 # TODO: consider returning a list of dictionaries
 # TODO: easier evaluation of automaton value when x="TRUE", so use that case
-def get_choice_automata(g, t, x="TRUE"):
+def get_choice_automata(g, t, x="TRUE", return_fragments=False):
     """
     given an automaton g, a time horizon t, and a horizon-limited condition x, generate:
     a list of tuples (action, act_automaton, interval); where action is an action of the
@@ -770,11 +770,13 @@ def get_choice_automata(g, t, x="TRUE"):
     :param g:
     :param t:
     :param x:
+    :param return_fragments:
     :return:
     """
     root = g.q0
     choices = g.k(root)
     out = []
+    frags = []
     l = len(choices)
     discount = 0.5
     # for each choice available from start...
@@ -800,14 +802,20 @@ def get_choice_automata(g, t, x="TRUE"):
                 cond_auto = build_fragment_tree(gns, g)
                 q_of_kn = cond_auto.optimal(discount)
                 out.append((kn, gnp, q_of_kn))
+                for gf in gns:
+                    frags.append((kn, gf))
             else:
                 for gf in gns:
                     lows.append(gf.optimal(discount, best=False))
                     highs.append(gf.optimal(discount, best=True))
+                    frags.append((kn, gf))
                 interval = [np.max(lows), np.max(highs)]
                 out.append((kn, gnp, interval))
 
-    return out
+    if return_fragments:
+        return out, frags
+    else:
+        return out
 
 
 def get_choice_fragments(g, t, x="TRUE"):
@@ -879,23 +887,34 @@ def choose_optimal_automata(choices, verbose=False):
     :return:
     """
     intervals = [choice[2] for choice in choices]
-    # find all un-dominated intervals
-    # optimal carries tuples containing an optimal action and an automaton
-    # whose first action is that optimal action.
+
     optimal = []
     if not intervals:
         return False
-    inf = np.max(np.min(intervals, axis=1))
-    for i, interval in enumerate(intervals):
-        if interval[1] >= inf:
-            if verbose:
-                print(choices[i][0], interval)
-            optimal.append((choices[i][0], choices[i][1]))
+
+    if choices[0][1].prob:
+        # find all automata whose expected utility is the best
+        v_max = np.max(intervals)
+        for i, interval in enumerate(intervals):
+            if interval >= v_max:
+                if verbose:
+                    print(choices[i][0], interval)
+                optimal.append((choices[i][0], choices[i][1]))
+    else:
+        # find all un-dominated intervals
+        # optimal carries tuples containing an optimal action and an automaton
+        # whose first action is that optimal action.
+        inf = np.max(np.min(intervals, axis=1))
+        for i, interval in enumerate(intervals):
+            if interval[1] >= inf:
+                if verbose:
+                    print(choices[i][0], interval)
+                optimal.append((choices[i][0], choices[i][1]))
 
     return optimal
 
 
-def generate_fragments(gn, g0, q0, x, t):
+def generate_fragments(gn, g0, q0, x, t, check_at_end=True):
     """
     Given an Automaton gn, a prototype Automaton g0, a starting state q0,
     a finite horizon condition x, and the length of that horizon t, generate
@@ -903,11 +922,16 @@ def generate_fragments(gn, g0, q0, x, t):
     depth t, that history satisfies x, and after t the Automaton behaves like
     g0.
 
+    If check_at_end is true, then generate_fragments will generate all possible
+    fragments of length t, and check each for satisfaction of x. Otherwise, it
+    checks each as they're built.
+
     :param gn:
     :param g0:
     :param q0:
     :param x:
     :param t:
+    :param check_at_end:
     :return:
     """
 
@@ -941,7 +965,13 @@ def generate_fragments(gn, g0, q0, x, t):
                 # tack the prototype system onto the end
                 sys_n_prime = sys_n_ren.union(g0, state)
                 # if this new system satisfies the condition...
-                if sys_n_prime.checkCTL("temp.smv", f):
+                if not check_at_end:
+                    if sys_n_prime.checkCTL("temp.smv", f):
+                        # set the system's current state to the only possible next state
+                        sys_n_prime.qn = sys_n_prime.graph.neighbors(sys_n_prime.qn, mode=OUT)[0]
+                        # and add the system to our list of systems.
+                        new_systems.append(sys_n_prime)
+                else:
                     # set the system's current state to the only possible next state
                     sys_n_prime.qn = sys_n_prime.graph.neighbors(sys_n_prime.qn, mode=OUT)[0]
                     # and add the system to our list of systems.
@@ -952,7 +982,8 @@ def generate_fragments(gn, g0, q0, x, t):
     # now that all the systems in our list are deterministic to depth t
     # we cut the "chaff" from each automaton, because we added a lot of superfluous states and transitions
     # so, for each system...
-    for system in systems:
+    good_systems = []
+    for system in tqdm(systems):
         # find out what the identifier is for the last prototype we tacked on
         clone_no = "-"+str(system.num_clones)
         # get all the old vertices we want to be keeping
@@ -973,7 +1004,13 @@ def generate_fragments(gn, g0, q0, x, t):
         # set the q0 of this pared-down system to what it should be
         system.q0 = system.graph.vs.find(name=str(q0)).index
         system.t = t
-    return systems
+        if check_at_end:
+            if system.checkCTL("temp.smv", f):
+                good_systems.append(system)
+
+    if not check_at_end:
+        good_systems = systems
+    return good_systems
 
 
 def build_fragment_tree(fragments, g0):
