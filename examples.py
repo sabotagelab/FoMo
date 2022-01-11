@@ -7,6 +7,7 @@ Created July 2020
 from random_weighted_automaton import *
 from model_check import *
 from obenum import enum
+from bayes_opt import explore_formulas
 import igraph as ig
 import numpy as np
 import pickle
@@ -256,6 +257,7 @@ def test_gridworld():
             act_es = tree.graph.es.select(_source=v, action=action)
             act_prob = sum(act_es["prob"])
             np.testing.assert_allclose(act_prob, 1)
+    print(tree.optimal(0.9))
     pass
 
 
@@ -266,7 +268,7 @@ def enum_gridworld():
         atoms.append("(name="+str(s)+")")
     # horizon of 5 is probably gonna fry my computer, but we'll see...
     # db, vdb = enum(gw, 3, 5, atoms)
-    db, vdb = enum(gw, 3, 4, atoms, condition="EF EG (name = 10)")
+    db, vdb = enum(gw, 3, 4, atoms, condition="EF EG (name = 7)")
     best = []
     for l, phi_l in enumerate(db):
         best_score = 2
@@ -282,10 +284,20 @@ def enum_gridworld():
     print(best)
 
 
+def explore_gridworld():
+    gw = setupGridworld()
+    atoms = []
+    for s in range(12):
+        atoms.append("name="+str(s))
+    explore_formulas(gw, propositions=atoms, online_query_size=10)
+
+
 if __name__ == "__main__":
     # originalObligations()
     # modifiedObligations(verbose=False)
     # enumeration()
     # test_fragments()
     # test_gridworld()
-    enum_gridworld()
+    # enum_gridworld()
+    explore_gridworld()
+    pass

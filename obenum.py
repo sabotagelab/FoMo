@@ -90,6 +90,7 @@ def enum(auto, l_max, horizon, atoms, condition="TRUE", unary_ops=[], binary_ops
 # TODO: check error at the end? Checking each formula as it's created is super expensive.
 # TODO: break error into chunks so I *can* check error for just one formula
 # ^ inner function should take the fragments as parameters
+# TODO: allow error to be determined by a subset of optimal/sub-optimal fragments
 def error(db, auto, horizon, condition="TRUE"):
     # get all the fragments
     choice_automata, frags = get_choice_automata(auto, horizon, condition, True)
@@ -122,7 +123,7 @@ def error(db, auto, horizon, condition="TRUE"):
 
                 for i, frag in enumerate(frags):
                     if not frag[0] in optimal_actions:
-                        check = frag.checkCTL("temp.smv", phi)
+                        check = frag[1].checkCTL("temp.smv", phi)
                         if check:
                             fp += 1
                         else:

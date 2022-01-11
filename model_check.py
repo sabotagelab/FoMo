@@ -37,7 +37,7 @@ class Automaton(object):
         :param initial_state:
         """
         self.graph = graph
-        self.graph.es["delete"] = [0]*self.graph.ecount()
+        self.graph.es["delete"] = [0] * self.graph.ecount()
         self.q0 = initial_state
 
         self.qn = self.q0
@@ -158,7 +158,7 @@ class Automaton(object):
         effects = [(0, 1), (0, -1), (-1, 0), (1, 0)]
         # define the probability that an effect is effected in the case that the effect is not the assumed consequence
         # of a taken action
-        off_prob = (1.0 - action_success)/3.0
+        off_prob = (1.0 - action_success) / 3.0
         # set up attribute dictionary and edge list so all edges can be added in one go
         edge_tuples = []
         signatures = []
@@ -451,6 +451,12 @@ class Automaton(object):
                     # set the transition probability for action i for this edge to its prob
                     t[i, tup[0], tup[1]] = edge["prob"]
                     r[i, tup[0], tup[1]] = edge["weight"] * mod
+                # sometimes an action may not be conditionally possible, so check for rows in t that are all zeros
+                # in which case create a self-transition with probability 1 and reward = punish
+                for k in range(vcount):
+                    if sum(t[i, k]) == 0:
+                        t[i, k, k] = 1
+                        r[i, k, k] = punish
 
         else:
             # This loop iterates through the edges in the graph so each transition
@@ -723,8 +729,9 @@ def checkConditional(g, a, x, t, verbose=False):
         if verbose:
             print(m[0])
         if a.isCTLS():
-            truth_n = m[1].checkToCTL('temp.smv', a.getPhi(), a.phi_neg,
-                                      verbose=verbose)
+            # truth_n = m[1].checkToCTL('temp.smv', a.getPhi(), a.phi_neg,
+                                      # verbose=verbose)
+            truth_n = m[1].checkCTL('temp.smv', a.getPhi(), a.phi_neg)
         elif a.isSTIT():
             phi = a.getPhi()
             if not a.isNegSTIT():
@@ -787,6 +794,11 @@ def get_choice_automata(g, t, x="TRUE", return_fragments=False):
         gnr = deepcopy(gn)
         gnr.q_previous.append(-1)
         gnp = gnr.union(g, target=root)
+        if x == "TRUE" and not return_fragments:
+            # skip the hard stuff
+            q_of_kn = gnp.optimal(discount)
+            out.append((kn, gnp, q_of_kn))
+            continue
         # get a list of automata whose first action is kn, and have one history
         # up to depth t, and that history satisfies X, and after that it behaves
         # like g
@@ -811,6 +823,8 @@ def get_choice_automata(g, t, x="TRUE", return_fragments=False):
                     frags.append((kn, gf))
                 interval = [np.max(lows), np.max(highs)]
                 out.append((kn, gnp, interval))
+        else:
+            raise RuntimeError("No fragments found: maybe the condition is not satisfiable, or transitions are missing")
 
     if return_fragments:
         return out, frags
@@ -890,6 +904,8 @@ def choose_optimal_automata(choices, verbose=False):
 
     optimal = []
     if not intervals:
+        if verbose:
+            print("No Intervals")
         return False
 
     if choices[0][1].prob:
@@ -985,7 +1001,7 @@ def generate_fragments(gn, g0, q0, x, t, check_at_end=True):
     good_systems = []
     for system in tqdm(systems):
         # find out what the identifier is for the last prototype we tacked on
-        clone_no = "-"+str(system.num_clones)
+        clone_no = "-" + str(system.num_clones)
         # get all the old vertices we want to be keeping
         path = system.q_previous
         path.append(system.qn)
@@ -1089,6 +1105,10 @@ def build_fragment_tree(fragments, g0):
                 act_probs = []
                 if prob:
                     act_probs = [edge["prob"] for edge in act_es]
+                    if np.sum(act_probs) == 0:
+                        # there are no edges in this action, so
+
+                        pass
                 for edge in act_es:
                     # find target label
                     target = edge.target_vertex
@@ -1113,13 +1133,13 @@ def build_fragment_tree(fragments, g0):
                         e_new[attr] = edge[attr]
                     # normalize the probability
                     if prob:
-                        e_new["prob"] = e_new["prob"]/np.sum(act_probs)
+                        e_new["prob"] = e_new["prob"] / np.sum(act_probs)
         front_vs = new_front
         frag_partitions = new_partitions
 
     # turn the graph we've built into an automaton
-    g_new.vs["target"] = [False]*g_new.vcount()
-    g0.graph.vs["target"] = [True]*g0.graph.vcount()
+    g_new.vs["target"] = [False] * g_new.vcount()
+    g0.graph.vs["target"] = [True] * g0.graph.vcount()
     g_new = g_new.disjoint_union(g0.graph)
     move_edges = g_new.es.select(_target_in=front_vs)
     mv_edg_tuples = []
@@ -1147,4 +1167,3 @@ def build_fragment_tree(fragments, g0):
         fragment.q0 = q0
 
     return cond_auto
-
