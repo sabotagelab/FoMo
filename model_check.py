@@ -483,6 +483,7 @@ class Automaton(object):
 
         :param file:
         :param x:
+        :param verbose:
         :return:
         """
         # convert graph to nuXmv model
@@ -502,6 +503,26 @@ class Automaton(object):
         # out = subprocess.run([nuxmv, "-source", "cmd.txt", file], shell=True, stdout=subprocess.PIPE)
         # out = subprocess.run([nuxmv, file], shell=True, stdout=subprocess.PIPE)
         out = subprocess.run([nuxmv, file], stdout=subprocess.PIPE)
+        check = "true" in str(out.stdout)
+        if verbose:
+            print(out.stdout)
+        return check
+
+    def checkPCTL(self, m_file, p_file, x, verbose=False):
+        """
+        Checks the automaton for a given PCTL specification
+
+        :param m_file:
+        :param p_file:
+        :param x:
+        :param verbose:
+        :return:
+        """
+        # convert graph to PRISM model
+        self.convertToPRISM(m_file, p_file, x)
+        # TODO: extract this and make it easier to change
+        prism = "/home/prism-4.7-linux64/bin/prism"
+        out = subprocess.run([prism, m_file, p_file], stdout=subprocess.PIPE)
         check = "true" in str(out.stdout)
         if verbose:
             print(out.stdout)
@@ -527,40 +548,41 @@ class Automaton(object):
         """
         Produces a NuXmv input file specifying this automaton.
         :param file:
+        :param x:
         :return:
         """
         with open(file, 'w') as f:
             f.write("MODULE main\n\n")
-            self._writeStates(f)
+            self._writeStatesNuXmv(f)
 
-            self._writeNames(f)
+            self._writeNamesNuXmv(f)
 
-            self._writeVars(f)
+            self._writeVarsNuXmv(f)
 
             # begin ASSIGN constraint for state and name transitions
             f.write("ASSIGN\n")
 
             # States:
-            self._writeStateTrans(f)
+            self._writeStateTransNuXmv(f)
 
             # Names:
-            self._writeNameTrans(f)
+            self._writeNameTransNuXmv(f)
 
             # Properties:
-            self._writePropTrans(f)
+            self._writePropTransNuXmv(f)
 
             # Specification
             f.write(lang.upper() + "SPEC " + x + ";")
             f.write("\n")
 
-    def _writeStates(self, f):
+    def _writeStatesNuXmv(self, f):
         sep = ', '
         # include each vertex as a state in the model
         states = [str(v.index) for v in self.graph.vs]
         states = sep.join(states)
         f.write("VAR state: {" + states + "};\n\n")
 
-    def _writeNames(self, f):
+    def _writeNamesNuXmv(self, f):
         sep = ', '
         # since multiple states can be associated with the same state of a
         # smaller original automaton, we want to track what that original
@@ -572,7 +594,7 @@ class Automaton(object):
         names = sep.join(names)
         f.write("VAR name: {" + names + "};\n\n")
 
-    def _writeStateTrans(self, f):
+    def _writeStateTransNuXmv(self, f):
         sep = ', '
         # set initial state
         f.write(" init(state) := " + str(self.q0) + ";\n")
@@ -595,7 +617,7 @@ class Automaton(object):
         f.write("  esac;\n")
         f.write("\n")
 
-    def _writeNameTrans(self, f):
+    def _writeNameTransNuXmv(self, f):
         # set initial name
         init_name = self.graph.vs["name"][self.q0]
         f.write(" init(name) := " + str(init_name) + ";\n")
@@ -615,7 +637,7 @@ class Automaton(object):
         f.write("  esac;\n")
         f.write("\n")
 
-    def _writeVars(self, f):
+    def _writeVarsNuXmv(self, f):
         # if auto has a counter
         if self.counter:
             # ... then write the counter var
@@ -624,7 +646,7 @@ class Automaton(object):
             end = str(self.counter[2])
             f.write("VAR " + c_name + " : " + start + " .. " + end + ";\n\n")
 
-    def _writePropTrans(self, f):
+    def _writePropTransNuXmv(self, f):
         # if auto has a counter
         if self.counter:
             # ... then write the counter transitions
@@ -634,13 +656,61 @@ class Automaton(object):
             f.write(" next(" + c + ") := (" + c + "<" + t + ")?(" + c + "+1):(" +
                     c + ");\n\n")
 
+    def convertToPRISM(self, m_file, p_file, x):
+        """
+        Produces a PRISM model file specifying this automaton, and a properties file specifying the formula
+        :param m_file:
+        :param p_file:
+        :param x:
+
+        :return:
+        """
+        with open(m_file, 'w') as f:
+            f.write("mdp\n")
+            f.write("module main\n")
+
+            states = [v.index for v in self.graph.vs]
+            names = self.graph.vs["name"]
+            names = list(set(names))
+            names = [int(namei) for namei in names]
+            # make a state variable that goes from 0 to number of states; init q0.id
+            f.write("state : [0.." + str(max(states)) + "] init " + str(self.q0) + ";")
+            # make a name variable that goes from 0 to maximum name; init q0.name
+            f.write("name : [0.." + str(max(names)) + "] init " + self.graph.vs["name"][self.q0] + ";")
+            # for each vertex...
+            for v in self.graph.vs:
+                # for each action at vertex...
+                for k in self.k(v):
+                    # initialize command string
+                    command = "    [] state=" + v.index + " -> "
+                    plus = ""
+
+                    # for each edge in that action...
+                    for e in self.graph.es.select(action_eq=k):
+                        prob = str(e["prob"])
+                        tgt_id = str(e.target_vertex.index)
+                        tgt_nm = str(e.target_vertex["name"])
+                        command += plus + prob + " : (state'=" + tgt_id + ")&(name'=" + tgt_nm
+                        if not plus:
+                            plus = " + "
+                    command += ";\n"
+                    f.write(command)
+                f.write("\n")
+
+            f.write("endmodule")
+
+        with open(p_file, 'w') as f:
+            # Specification
+            f.write(x)
+            f.write("\n")
+
 
 class Obligation(object):
     """
     Contains an obligation in Dominance Act Utilitarian deontic logic
     """
 
-    def __init__(self, phi, is_ctls, is_neg):
+    def __init__(self, phi, is_ctls, is_neg, is_pctl=False):
         """
         Creates an Obligation object
 
@@ -652,6 +722,7 @@ class Obligation(object):
         self.is_ctls = is_ctls
         self.is_neg = is_neg
         self.is_stit = not is_ctls
+        self.is_pctl = is_pctl
         self.phi_neg = False
 
     @classmethod
@@ -664,20 +735,41 @@ class Obligation(object):
         """
         return cls(phi, True, False)
 
+    @classmethod
+    def fromPCTL(cls, phi):
+        """
+        Creates an Obligation object from a PCTL string
+
+        :param phi:
+        :return:
+        """
+        return cls(phi, False, False, True)
+
     def isCTLS(self):
         """
-        Checks if obligation is a well formed CTL* formula
+        Checks if obligation is a well-formed CTL* formula
 
         :return:
         """
+        # TODO: use grammar to check this
         return self.is_ctls
+
+    def isPCTL(self):
+        """
+        Checks if obligation is a well-formed PCTL formula
+
+        :return:
+        """
+        # TODO: use grammar to check this
+        return self.is_pctl
 
     def isSTIT(self):
         """
-        Checks if obligation is a well formed dstit statement
+        Checks if obligation is a well-formed dstit statement
 
         :return:
         """
+        # TODO: use grammar to check this
         return self.is_stit
 
     def isNegSTIT(self):
@@ -686,7 +778,7 @@ class Obligation(object):
 
         :return:
         """
-        return (self.is_stit and self.is_neg)
+        return self.is_stit and self.is_neg
 
     def getPhi(self):
         """
@@ -732,6 +824,8 @@ def checkConditional(g, a, x, t, verbose=False):
             # truth_n = m[1].checkToCTL('temp.smv', a.getPhi(), a.phi_neg,
                                       # verbose=verbose)
             truth_n = m[1].checkCTL('temp.smv', a.getPhi(), a.phi_neg)
+        elif a.isPCTL():
+            truth_n = m[1].checkPCTL('temp.sm', 'temp.pctl', a.getPhi())
         elif a.isSTIT():
             phi = a.getPhi()
             if not a.isNegSTIT():

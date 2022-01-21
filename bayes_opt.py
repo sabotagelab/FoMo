@@ -115,27 +115,66 @@ def explore_formulas(auto, propositions=None, init_query_size=10, online_query_s
     #         R -> S
     #         T -> """
 
+    # grammar_str = """
+    #         S -> S AND R | S OR R | S IMPLIES R | NOT S | LB S RB | P | LB T RB
+    #         P -> EGLB S | ENXT S | EFTR S | AGBL S | ANXT S | AFTR S | AB S UNTIL R CB | EB S UNTIL R CB
+    #         R -> S
+    #         NOT -> "!"
+    #         AND -> "&"
+    #         OR -> "|"
+    #         IMPLIES -> "->"
+    #         UNTIL -> "U"
+    #         EGLB -> "EG"
+    #         ENXT  -> "EX"
+    #         EFTR -> "EF"
+    #         AGBL -> "AG"
+    #         ANXT -> "AX"
+    #         AFTR -> "AF"
+    #         LB -> "lb"
+    #         RB -> "rb"
+    #         AB -> "A["
+    #         EB -> "E["
+    #         CB -> "]"
+    #         T -> """
+
     grammar_str = """
-            S -> S AND R | S OR R | S IMPLIES R | NOT S | LB S RB | P | LB T RB
-            P -> EGLB S | ENXT S | EFTR S | AGBL S | ANXT S | AFTR S | AB S UNTIL R CB | EB S UNTIL R CB
-            R -> S
-            NOT -> "!"
-            AND -> "&"
-            OR -> "|"
-            IMPLIES -> "->"
-            UNTIL -> "U"
-            EGLB -> "EG"
-            ENXT  -> "EX"
-            EFTR -> "EF"
-            AGBL -> "AG"
-            ANXT -> "AX"
-            AFTR -> "AF"
-            LB -> "lb"
-            RB -> "rb"
-            AB -> "A["
-            EB -> "E["
-            CB -> "]"
-            T -> """
+                N -> PROB COMP PCT OB Q CB | NOT PROB COMP PCT OB Q CB
+                Q -> N | NOT LB Q RB | Q AND R | Q OR R | Q IMPLIES R | LB S RB | T
+                R -> Q
+                COMP -> LEQ | LT | GEQ | GT
+                PCT -> ZERO | ONE | TWO | THREE | FOUR | FIVE | SIX | SEVEN | EIGHT | NINE | TEN
+                S -> GLB O | NXT O | FTR O | O UNTIL V
+                O -> S | Q
+                V -> S | Q
+                LEQ -> "<="
+                LT -> "<"
+                GEQ -> ">="
+                GT -> ">"
+                PROB -> "P"
+                ZERO -> "0"
+                ONE -> "0.1"
+                TWO -> "0.2"
+                THREE -> "0.3"
+                FOUR -> "0.4"
+                FIVE -> "0.5"
+                SIX -> "0.6"
+                SEVEN -> "0.7"
+                EIGHT -> "0.8"
+                NINE -> "0.9"
+                TEN -> "1.0"
+                NOT -> "!"
+                AND -> "&"
+                OR -> "|"
+                IMPLIES -> "=>"
+                UNTIL -> "U"
+                GLB -> "G"
+                NXT  -> "X"
+                FTR -> "F"
+                LB -> "lb"
+                RB -> "rb"
+                OB -> "["
+                CB -> "]"
+                T -> """
 
     grammar_str = grammar_str + prop_str
 
@@ -145,7 +184,7 @@ def explore_formulas(auto, propositions=None, init_query_size=10, online_query_s
     ctl_parser = ChartParser(ctl_grammar)
 
     # space = ParameterSpace([CFGParameter("grammar", ctl_grammar, max_length=10, min_length=3)])
-    space = ParameterSpace([CFGParameter("grammar", ctl_grammar, max_length=8, min_length=0)])
+    space = ParameterSpace([CFGParameter("grammar", ctl_grammar, max_length=16, min_length=0)])
     random_design = RandomDesign(space)
     # X_init = random_design.get_samples(5)
     # X_init_strings = unparse(X_init)
@@ -153,10 +192,14 @@ def explore_formulas(auto, propositions=None, init_query_size=10, online_query_s
     # get initial formulas and interests
     # xs, ys = init_query(init_query_size, ctl_parser)
     # for testing, set up dummy inputs and outputs
-    xs = ["EG name=7", "EF AX name=7", "AG name=7", "AF EX name=7", "EX name=0", "EX name=1", "EF AG name=11",
-          "name=0", "A[ ! name=11 U name=0 ]", "A[ name=5 U name=0 ]"]
-    # xs =
-    ys = [1 - 78 / 100, 1 - 70 / 100, 1 - 90 / 100, 1 - 74 / 100, 1 - 0, 1 - 0, 1 - 45 / 100, 1 - 0, 1 - 0, 1 - 0]
+    # xs = ["EG name=7", "EF AX name=7", "AG name=7", "AF EX name=7", "EX name=0", "EX name=1", "EF AG name=11",
+    #       "name=0", "A[ ! name=11 U name=0 ]", "A[ name=5 U name=0 ]"]
+    xs = ["P >= 0.4 [ ( F G name=7 ) ]", "P >= 0 [ ( F name=7 ) ]", "P <= 0.7 [ ( F name=11 ) ]",
+          "! P <= 0.7 [ ( F name=10 ) => ( F name=11 ) ]", "P >= 1.0 [ name=0 ]", "P <= 0 [ name=1 ]",
+          "P >= 0.7 [ ( X name=4 ) ]", "P <= 0 [ ( F name=11 ) & ( F name=7 ) ]",
+          "P <= 1.0 [ ( ! ( name=11 ) U name=0 ) ]", "P <= 1.0 [ ( name=5 U name=0 ) ]"]
+    xs = [deformat(x) for x in xs]
+    ys = [1 - 78 / 100, 1 - 70 / 100, 1 - 90 / 100, 1 - 74 / 100, 1 - 0, 1 - 0, 1 - 58 / 100, 1 - 0, 1 - 0, 1 - 0]
 
     xs = np.array(xs).reshape(-1, 1)
     ys = np.array(ys).reshape(-1, 1)
@@ -275,33 +318,90 @@ def init_query(init_size, parser):
 
 
 if __name__ == "__main__":
+    # test_str = """
+    #         Q -> PROB COMP PCT OB S CB
+    #         COMP -> LEQ | LT | GEQ | GT
+    #         PCT -> ZERO | ONE | TWO | THREE | FOUR | FIVE | SIX | SEVEN | EIGHT | NINE | TEN
+    #         S -> S AND R | S OR R | S IMPLIES R | NOT S | LB S RB | LB P RB | T
+    #         P -> GLB S | NXT S | FTR S | R UNTIL S | P
+    #         R -> S
+    #         NOT -> "!"
+    #         AND -> "&"
+    #         OR -> "|"
+    #         LEQ -> "<="
+    #         LT -> "<"
+    #         GEQ -> ">="
+    #         GT -> ">"
+    #         PROB -> "P"
+    #         ZERO -> "0"
+    #         ONE -> "0.1"
+    #         TWO -> "0.2"
+    #         THREE -> "0.3"
+    #         FOUR -> "0.4"
+    #         FIVE -> "0.5"
+    #         SIX -> "0.6"
+    #         SEVEN -> "0.7"
+    #         EIGHT -> "0.8"
+    #         NINE -> "0.9"
+    #         TEN -> "1.0"
+    #         NOT -> "!"
+    #         AND -> "&"
+    #         OR -> "|"
+    #         IMPLIES -> "=>"
+    #         UNTIL -> "U"
+    #         GLB -> "G"
+    #         NXT  -> "X"
+    #         FTR -> "F"
+    #         LB -> "lb"
+    #         RB -> "rb"
+    #         OB -> "["
+    #         CB -> "]"
+    #         T -> "state=7" | "state=11" | "state=3" | "state=6" | "state=10"
+    #         """
     test_str = """
-            S -> S AND R | S OR R | S IMPLIES R | NOT S | LB S RB | P | T
-            P -> EGLB S | ENXT S | EFTR S | AGBL S | ANXT S | AFTR S | AB S UNTIL R CB | EB S UNTIL R CB
-            R -> S
-            NOT -> "!"
-            AND -> "&"
-            OR -> "|"
-            IMPLIES -> "->"
-            UNTIL -> "U"
-            EGLB -> "EG"
-            ENXT  -> "EX"
-            EFTR -> "EF"
-            AGBL -> "AG"
-            ANXT -> "AX"
-            AFTR -> "AF"
-            LB -> "lb"
-            RB -> "rb"
-            AB -> "A["
-            EB -> "E["
-            CB -> "]"
-            T -> "q" | "p" | "a" | "b" 
-            """
+                N -> PROB COMP PCT OB Q CB
+                Q -> N | NOT LB Q RB | Q AND R | Q OR R | Q IMPLIES R | LB S RB | T
+                R -> Q
+                COMP -> LEQ | LT | GEQ | GT
+                PCT -> ZERO | ONE | TWO | THREE | FOUR | FIVE | SIX | SEVEN | EIGHT | NINE | TEN
+                S -> GLB O | NXT O | FTR O | O UNTIL P
+                O -> S | Q
+                P -> S | Q
+                LEQ -> "<="
+                LT -> "<"
+                GEQ -> ">="
+                GT -> ">"
+                PROB -> "P"
+                ZERO -> "0"
+                ONE -> "0.1"
+                TWO -> "0.2"
+                THREE -> "0.3"
+                FOUR -> "0.4"
+                FIVE -> "0.5"
+                SIX -> "0.6"
+                SEVEN -> "0.7"
+                EIGHT -> "0.8"
+                NINE -> "0.9"
+                TEN -> "1.0"
+                NOT -> "!"
+                AND -> "&"
+                OR -> "|"
+                IMPLIES -> "=>"
+                UNTIL -> "U"
+                GLB -> "G"
+                NXT  -> "X"
+                FTR -> "F"
+                LB -> "lb"
+                RB -> "rb"
+                OB -> "["
+                CB -> "]"
+                T -> "state=7" | "state=11" | "state=3" | "state=6" | "state=10"
+                """
     test_grammar = Grammar.fromstring(test_str)
-    test_space = ParameterSpace([CFGParameter("test_grammar", test_grammar, max_length=8, min_length=0)])
+    test_space = ParameterSpace([CFGParameter("test_grammar", test_grammar, max_length=15, min_length=0)])
     test_design = RandomDesign(test_space)
     print("Testing...")
     print(timeit.timeit('test_design.get_samples(10)', globals=globals(), number=10))
     samples = test_design.get_samples(10)
     for sample in samples:
-        print(unparse(sample))
+        print(reformat(unparse(sample)[0]))
