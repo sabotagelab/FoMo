@@ -229,6 +229,11 @@ def setupGridworldSmaller():
                                                ("pit", [(2, 1)], -50, True, True),
                                                ("wall", [(1, 1)], -1, False, False)])
 
+def setupGridworldTwo():
+    return Automaton.as_gridworld(5, 5, cells=[("goal", [(4, 2)], 10, True, True),
+                                               ("fire", [(0, 4), (1, 4), (2, 4), (3, 4), (4, 4), (1, 3), (2, 3), (3, 3),
+                                                         (1, 2), (2, 2), (3, 2)], -5, False, True)])
+
 
 def test_fragments():
     gt = setupAuto()
@@ -290,6 +295,14 @@ def explore_gridworld():
     for s in range(12):
         atoms.append("name="+str(s))
     explore_formulas(gw, propositions=atoms, online_query_size=10)
+
+
+def explore_gridworld2():
+    gw = setupGridworldTwo()
+    atoms = []
+    for s in range(5*5):
+        atoms.append("name="+str(s))
+    explore_formulas(gw, propositions=atoms, online_query_size=60)
 
 
 if __name__ == "__main__":

@@ -123,7 +123,7 @@ class GrammarGeneticValidityOptimizer(GrammarGeneticProgrammingOptimizer):
 def fitness_st_validity(population, acquisition, automaton):
     formulas = unparse(population)
     fitness_pop = acquisition.evaluate(formulas)
-    obligations = [Obligation.fromCTL(reformat(phi[0])) for phi in formulas]
+    obligations = [Obligation.fromPCTL(reformat(phi[0])) for phi in formulas]
     validity_pop = np.array([checkObligation(automaton, obligation) for obligation in obligations]).reshape(-1, 1)
     return fitness_pop * validity_pop
 

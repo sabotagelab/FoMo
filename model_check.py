@@ -521,7 +521,7 @@ class Automaton(object):
         # convert graph to PRISM model
         self.convertToPRISM(m_file, p_file, x)
         # TODO: extract this and make it easier to change
-        prism = "/home/prism-4.7-linux64/bin/prism"
+        prism = "/home/colin/prism-4.7-linux64/bin/prism"
         out = subprocess.run([prism, m_file, p_file], stdout=subprocess.PIPE)
         check = "true" in str(out.stdout)
         if verbose:
@@ -674,23 +674,24 @@ class Automaton(object):
             names = list(set(names))
             names = [int(namei) for namei in names]
             # make a state variable that goes from 0 to number of states; init q0.id
-            f.write("state : [0.." + str(max(states)) + "] init " + str(self.q0) + ";")
+            f.write("state : [0.." + str(max(states)) + "] init " + str(self.q0) + ";\n")
             # make a name variable that goes from 0 to maximum name; init q0.name
-            f.write("name : [0.." + str(max(names)) + "] init " + self.graph.vs["name"][self.q0] + ";")
+            f.write("name : [0.." + str(max(names)) + "] init " + self.graph.vs["name"][self.q0] + ";\n")
             # for each vertex...
             for v in self.graph.vs:
                 # for each action at vertex...
                 for k in self.k(v):
                     # initialize command string
-                    command = "    [] state=" + v.index + " -> "
+                    command = "    [] state=" + str(v.index) + " -> "
                     plus = ""
-
+                    # get the edges from this vertex that are part of this action
+                    esi = self.graph.es.select(_source_eq=v, action_eq=k)
                     # for each edge in that action...
-                    for e in self.graph.es.select(action_eq=k):
+                    for e in esi:
                         prob = str(e["prob"])
                         tgt_id = str(e.target_vertex.index)
                         tgt_nm = str(e.target_vertex["name"])
-                        command += plus + prob + " : (state'=" + tgt_id + ")&(name'=" + tgt_nm
+                        command += plus + prob + " : (state'=" + tgt_id + ")&(name'=" + tgt_nm + ")"
                         if not plus:
                             plus = " + "
                     command += ";\n"
