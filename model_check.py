@@ -137,19 +137,20 @@ class Automaton(object):
         v_attr_dict = {"x": [], "y": [], "pos": [], "label": [], "name": [], "type": [],
                        "absorbing": [], "accessible": [], "reward": []}
         k = 0
-        for x, y in positions:
-            v_attr_dict["x"].append(x)
-            v_attr_dict["y"].append(y)
-            v_attr_dict["pos"].append((x, y))
-            v_attr_dict["label"].append(str((x, y)))
-            v_attr_dict["name"].append(str(k))
-            cell_type = pos_to_type.get((x, y), "default")
-            cell_spec = type_to_spec.get(cell_type, default_spec)
-            v_attr_dict["type"].append(cell_type)
-            v_attr_dict["reward"].append(cell_spec[2])
-            v_attr_dict["absorbing"].append(cell_spec[3])
-            v_attr_dict["accessible"].append(cell_spec[4])
-            k += 1
+        for y in range(y_len):
+            for x in range(x_len):
+                v_attr_dict["x"].append(x)
+                v_attr_dict["y"].append(y)
+                v_attr_dict["pos"].append((x, y))
+                v_attr_dict["label"].append(str((x, y)))
+                v_attr_dict["name"].append(str(k))
+                cell_type = pos_to_type.get((x, y), "default")
+                cell_spec = type_to_spec.get(cell_type, default_spec)
+                v_attr_dict["type"].append(cell_type)
+                v_attr_dict["reward"].append(cell_spec[2])
+                v_attr_dict["absorbing"].append(cell_spec[3])
+                v_attr_dict["accessible"].append(cell_spec[4])
+                k += 1
         # add a vertex for every position, and set its attributes
         g_new.add_vertices(n, attributes=v_attr_dict)
 

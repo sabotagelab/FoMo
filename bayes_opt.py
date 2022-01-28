@@ -40,6 +40,7 @@ from model_check import get_choice_fragments, get_optimal_automata, get_choice_a
 
 
 # TODO: more parameters for more control over optimization
+# TODO: make grammar strings/objects their own thing
 def explore_formulas(auto, propositions=None, init_query_size=10, online_query_size=60):
     if not propositions:
         propositions = ['p', 'q', 'a', 'b']
@@ -207,9 +208,10 @@ def explore_formulas(auto, propositions=None, init_query_size=10, online_query_s
     # model = SSK_model(space, xs, ys, max_subsequence_length=5, n_restarts=3)
     # np.random.seed(123)
     # TODO: exorcise demons from the sampling method.
-    model = SSK_model(space, xs, ys, max_subsequence_length=5, n_restarts=3, observation_noise=True)
+    model = SSK_model(space, xs, ys, max_subsequence_length=8, n_restarts=5, observation_noise=True)
     # load acquisition function
-    expected_improvement = ExpectedImprovement(model)
+    # TODO: include some jitter in EI?
+    expected_improvement = ExpectedImprovement(model, jitter=0.8)
     # use GA to optimize acquisition function
     # optimizer = GrammarGeneticProgrammingOptimizer(space,
     #                                                dynamic=True,
@@ -220,9 +222,9 @@ def explore_formulas(auto, propositions=None, init_query_size=10, online_query_s
     optimizer = GrammarGeneticProgrammingOptimizer(space,
                                                    dynamic=True,
                                                    population_size=100,
-                                                   tournament_prob=0.5,
+                                                   tournament_prob=0.25,
                                                    p_crossover=0.8,
-                                                   p_mutation=0.1)
+                                                   p_mutation=0.2)
     # define BO loop
     bayesopt_loop_SSK = BayesianOptimizationLoop(model=model,
                                                  space=space,

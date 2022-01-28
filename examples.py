@@ -222,12 +222,12 @@ def enumeration():
 def setupGridworld():
     return Automaton.as_gridworld(4, 3, cells=[("goal", [(3, 2)], 10, True, True),
                                                ("pit", [(3, 1)], -50, True, True),
-                                               ("wall", [(1, 1)], -1, False, False)])
+                                               ("wall", [(1, 1)], -1, True, False)])
 
 def setupGridworldSmaller():
     return Automaton.as_gridworld(3, 3, cells=[("goal", [(2, 2)], 10, True, True),
                                                ("pit", [(2, 1)], -50, True, True),
-                                               ("wall", [(1, 1)], -1, False, False)])
+                                               ("wall", [(1, 1)], -1, True, False)])
 
 def setupGridworldTwo():
     return Automaton.as_gridworld(5, 5, cells=[("goal", [(4, 2)], 10, True, True),
