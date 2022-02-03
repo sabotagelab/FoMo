@@ -13,6 +13,9 @@ __pycache__/random_weighted_automaton.cpython-35.pyc
 *.png
 *.pdf
 *.pkl
+*.pstat
 .idea/dictionaries/Colin.xml
 *.smv
+*.sm
+*.pctl
 __pycache__/model_check.cpython-35.pyc
