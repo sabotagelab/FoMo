@@ -1,1 +1,1 @@
-! P > 0.7 [ name=9 | name=9 | name=9 | name=9 | name=9 ]
+P >= 0.1 [ ( ( name=19 U ( ! ( name=18 ) ) ) ) ]

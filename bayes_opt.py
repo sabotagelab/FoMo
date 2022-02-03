@@ -17,6 +17,7 @@ import pickle
 import time
 import timeit
 import numpy as np
+import cProfile as profile
 
 from emukit.core import ParameterSpace
 from emukit.core.initial_designs import RandomDesign
@@ -36,7 +37,8 @@ from boss.code.emukit_models.emukit_ssk_model import SSK_model
 # import our code
 from ECFG import EnumerativeGrammar
 from GrammarAcquisitionOptimizer import GrammarGeneticValidityOptimizer
-from model_check import get_choice_fragments, get_optimal_automata, get_choice_automata, choose_optimal_automata
+from model_check import get_choice_fragments, get_optimal_automata, get_choice_automata, choose_optimal_automata, \
+    Obligation, checkObligation
 
 
 # TODO: more parameters for more control over optimization
@@ -138,44 +140,87 @@ def explore_formulas(auto, propositions=None, init_query_size=10, online_query_s
     #         CB -> "]"
     #         T -> """
 
+    # grammar_str = """
+    #             N -> PROB COMP PCT OB Q CB | NOT PROB COMP PCT OB Q CB
+    #             Q -> N | NOT LB Q RB | Q AND R | Q OR R | Q IMPLIES R | LB S RB | T
+    #             R -> Q
+    #             COMP -> LEQ | LT | GEQ | GT
+    #             PCT -> ZERO | ONE | TWO | THREE | FOUR | FIVE | SIX | SEVEN | EIGHT | NINE | TEN
+    #             S -> GLB O | NXT O | FTR O | O UNTIL V
+    #             O -> S | Q
+    #             V -> S | Q
+    #             LEQ -> "<="
+    #             LT -> "<"
+    #             GEQ -> ">="
+    #             GT -> ">"
+    #             PROB -> "P"
+    #             ZERO -> "0"
+    #             ONE -> "0.1"
+    #             TWO -> "0.2"
+    #             THREE -> "0.3"
+    #             FOUR -> "0.4"
+    #             FIVE -> "0.5"
+    #             SIX -> "0.6"
+    #             SEVEN -> "0.7"
+    #             EIGHT -> "0.8"
+    #             NINE -> "0.9"
+    #             TEN -> "1.0"
+    #             NOT -> "!"
+    #             AND -> "&"
+    #             OR -> "|"
+    #             IMPLIES -> "=>"
+    #             UNTIL -> "U"
+    #             GLB -> "G"
+    #             NXT  -> "X"
+    #             FTR -> "F"
+    #             LB -> "lb"
+    #             RB -> "rb"
+    #             OB -> "["
+    #             CB -> "]"
+    #             T -> """
+
+    # a simplified, restricted PCTL grammar; for speed and for eliminating start-state formulas
     grammar_str = """
-                N -> PROB COMP PCT OB Q CB | NOT PROB COMP PCT OB Q CB
-                Q -> N | NOT LB Q RB | Q AND R | Q OR R | Q IMPLIES R | LB S RB | T
-                R -> Q
-                COMP -> LEQ | LT | GEQ | GT
-                PCT -> ZERO | ONE | TWO | THREE | FOUR | FIVE | SIX | SEVEN | EIGHT | NINE | TEN
-                S -> GLB O | NXT O | FTR O | O UNTIL V
-                O -> S | Q
-                V -> S | Q
-                LEQ -> "<="
-                LT -> "<"
-                GEQ -> ">="
-                GT -> ">"
-                PROB -> "P"
-                ZERO -> "0"
-                ONE -> "0.1"
-                TWO -> "0.2"
-                THREE -> "0.3"
-                FOUR -> "0.4"
-                FIVE -> "0.5"
-                SIX -> "0.6"
-                SEVEN -> "0.7"
-                EIGHT -> "0.8"
-                NINE -> "0.9"
-                TEN -> "1.0"
-                NOT -> "!"
-                AND -> "&"
-                OR -> "|"
-                IMPLIES -> "=>"
-                UNTIL -> "U"
-                GLB -> "G"
-                NXT  -> "X"
-                FTR -> "F"
-                LB -> "lb"
-                RB -> "rb"
-                OB -> "["
-                CB -> "]"
-                T -> """
+                    N -> PROB COMP PCT OB Q CB | NOT PROB COMP PCT OB Q CB
+                    Q -> NOT LB Q RB | Q AND R | Q OR R | Q IMPLIES LB R RB | LB S RB
+                    R -> Q
+                    COMP -> LEQ | GEQ
+                    PCT -> ZERO | ONE | TWO | THREE | FOUR | FIVE | SIX | SEVEN | EIGHT | NINE | TEN
+                    S -> GLB O | NXT O | FTR O | LB O UNTIL M RB
+                    M -> O
+                    O -> LB L RB | S | Q | T
+                    L -> NOT LB K RB | J AND K | J OR K | J IMPLIES LB K RB | LB K RB
+                    K -> L | S | T
+                    J -> K
+                    LEQ -> "<="
+                    LT -> "<"
+                    GEQ -> ">="
+                    GT -> ">"
+                    PROB -> "P"
+                    ZERO -> "0"
+                    ONE -> "0.1"
+                    TWO -> "0.2"
+                    THREE -> "0.3"
+                    FOUR -> "0.4"
+                    FIVE -> "0.5"
+                    SIX -> "0.6"
+                    SEVEN -> "0.7"
+                    EIGHT -> "0.8"
+                    NINE -> "0.9"
+                    TEN -> "1.0"
+                    NOT -> "!"
+                    AND -> "&"
+                    OR -> "|"
+                    IMPLIES -> "=>"
+                    UNTIL -> "U"
+                    GLB -> "G"
+                    NXT  -> "X"
+                    FTR -> "F"
+                    LB -> "lb"
+                    RB -> "rb"
+                    OB -> "["
+                    CB -> "]"
+                    T -> """
 
     grammar_str = grammar_str + prop_str
 
@@ -183,24 +228,28 @@ def explore_formulas(auto, propositions=None, init_query_size=10, online_query_s
     # ctl_grammar = EnumerativeGrammar.fromstring(grammar_str)
     # ctl_grammar.set_file("11_state_grammar.txt")
     ctl_parser = ChartParser(ctl_grammar)
-
+    max_length = 24
     # space = ParameterSpace([CFGParameter("grammar", ctl_grammar, max_length=10, min_length=3)])
-    space = ParameterSpace([CFGParameter("grammar", ctl_grammar, max_length=16, min_length=0)])
+    space = ParameterSpace([CFGParameter("grammar", ctl_grammar, max_length=max_length, min_length=0)])
     random_design = RandomDesign(space)
-    # X_init = random_design.get_samples(5)
+    X_init = random_design.get_samples(50)
     # X_init_strings = unparse(X_init)
 
     # get initial formulas and interests
-    # xs, ys = init_query(init_query_size, ctl_parser)
+    # xs, ys = init_query(init_query_size, ctl_parser, max_length)
     # for testing, set up dummy inputs and outputs
     # xs = ["EG name=7", "EF AX name=7", "AG name=7", "AF EX name=7", "EX name=0", "EX name=1", "EF AG name=11",
     #       "name=0", "A[ ! name=11 U name=0 ]", "A[ name=5 U name=0 ]"]
-    xs = ["P >= 0.4 [ ( F G name=7 ) ]", "P >= 0 [ ( F name=7 ) ]", "P <= 0.7 [ ( F name=11 ) ]",
-          "! P <= 0.7 [ ( F name=10 ) => ( F name=11 ) ]", "P >= 1.0 [ name=0 ]", "P <= 0 [ name=1 ]",
-          "P >= 0.7 [ ( X name=4 ) ]", "P <= 0 [ ( F name=11 ) & ( F name=7 ) ]",
-          "P <= 1.0 [ ( ! ( name=11 ) U name=0 ) ]", "P <= 1.0 [ ( name=5 U name=0 ) ]"]
+    # xs = ["! P >= 0.4 [ ( F G name=7 ) ]", "P >= 0 [ ( F name=7 ) ]", "P <= 0.7 [ ( F name=11 ) ]",
+    #       "! P <= 0.7 [ ( F name=10 ) => ( F name=11 ) ]", "P >= 1.0 [ ( F name=0 ) ]", "P <= 0 [ ! ( X name=1 ) ]",
+    #       "P >= 0.7 [ ( X name=4 ) ]", "P <= 0 [ ( F name=11 ) & ( F name=7 ) ]",
+    #       "P <= 1.0 [ ( ! ( name=11 ) U name=0 ) ]", "P <= 1.0 [ ( name=5 U name=0 ) ]"]
+    xs = ["! P >= 0.2 [ ( F name=0 ) ]", "P >= 0.5 [ ( F name=14 ) ]",
+          "P <= 0.5 [ ( F name=0 ) ]", "! P <= 0.8 [ ( F name=14 ) ]",
+          "! P <= 0.7 [ ( X X X X X X name=14 ) ]"]
     xs = [deformat(x) for x in xs]
-    ys = [1 - 78 / 100, 1 - 70 / 100, 1 - 90 / 100, 1 - 74 / 100, 1 - 0, 1 - 0, 1 - 58 / 100, 1 - 0, 1 - 0, 1 - 0]
+    # ys = [1 - 78 / 100, 1 - 70 / 100, 1 - 90 / 100, 1 - 74 / 100, 1 - 0, 1 - 0, 1 - 58 / 100, 1 - 0, 1 - 0, 1 - 0]
+    ys = [1 - 95/100, 1 - 95/100, 1 - 85/100, 1 - 89/100, 1 - 87/100]
 
     xs = np.array(xs).reshape(-1, 1)
     ys = np.array(ys).reshape(-1, 1)
@@ -209,9 +258,12 @@ def explore_formulas(auto, propositions=None, init_query_size=10, online_query_s
     # np.random.seed(123)
     # TODO: exorcise demons from the sampling method.
     model = SSK_model(space, xs, ys, max_subsequence_length=8, n_restarts=5, observation_noise=True)
+    with open("bayesopt_loop_SSK.model-cliffworld.pkl", 'rb') as f:
+        model = pickle.load(f)
     # load acquisition function
     # TODO: include some jitter in EI?
-    expected_improvement = ExpectedImprovement(model, jitter=0.8)
+    # expected_improvement = ExpectedImprovement(model, jitter=0.8)
+    expected_improvement = ExpectedImprovement(model)
     # use GA to optimize acquisition function
     # optimizer = GrammarGeneticProgrammingOptimizer(space,
     #                                                dynamic=True,
@@ -222,9 +274,9 @@ def explore_formulas(auto, propositions=None, init_query_size=10, online_query_s
     optimizer = GrammarGeneticProgrammingOptimizer(space,
                                                    dynamic=True,
                                                    population_size=100,
-                                                   tournament_prob=0.25,
+                                                   tournament_prob=0.5,
                                                    p_crossover=0.8,
-                                                   p_mutation=0.2)
+                                                   p_mutation=0.1)
     # define BO loop
     bayesopt_loop_SSK = BayesianOptimizationLoop(model=model,
                                                  space=space,
@@ -235,16 +287,27 @@ def explore_formulas(auto, propositions=None, init_query_size=10, online_query_s
     bayesopt_loop_SSK.iteration_end_event.append(summary)
     # run BO loop
     stop_crit = FixedIterationsStoppingCondition(i_max=online_query_size)
-    bayesopt_loop_SSK.run_loop(objective, stop_crit)
-    print("Done")
+    # bayesopt_loop_SSK.run_loop(objective, stop_crit)
+    print("Generating Best Valid Formulas")
+    pr = profile.Profile()
+    pr.disable()
     validity_optimizer = GrammarGeneticValidityOptimizer(space,
                                                          dynamic=True,
                                                          population_size=100,
                                                          tournament_prob=0.5,
                                                          p_crossover=0.8,
                                                          p_mutation=0.1)
-    best_x, best_fit = validity_optimizer.get_best_valid(expected_improvement, auto)
-    print(best_x)
+    pr.enable()
+    best_x, best_fit = validity_optimizer.get_best_valid(expected_improvement, auto, n=10)
+    pr.disable()
+    best_x = np.array(best_x)
+    rand_x = random_valid_formulas(space, auto, n=10)
+    xs, ys, zs = collect_eval(best_x, best_fit, rand_x, bayesopt_loop_SSK.model)
+    with open("experiment_cliffworld_1.pkl", "wb") as f:
+        pickle.dump((xs, ys, zs), f)
+    print("Done")
+    pr.dump_stats('profile.pstat')
+    return best_x, best_fit
 
 
 def summary(loop, loop_state):
@@ -286,7 +349,7 @@ def objective(X):
     return Y
 
 
-def init_query(init_size, parser):
+def init_query(init_size, parser, max_length):
     xs = []
     ys = []
     # initialize dataset
@@ -310,6 +373,10 @@ def init_query(init_size, parser):
             if not valid_ctl:
                 print("Grammatical Error: invalid formula.")
                 print("Please try again,\n")
+            if len(x_out.split(" ")) > max_length:
+                print("Grammatical Error: formula too long.")
+                print("Please try again, or restart with larger kernel space,\n")
+                valid_ctl = False
 
         xs.append(x_out)
 
@@ -317,6 +384,39 @@ def init_query(init_size, parser):
         print("\n")
         print("###################################################")
     return xs, ys
+
+
+def random_valid_formulas(space, auto, n):
+    valid = []
+    random_design = RandomDesign(space)
+    while len(valid) < n:
+        population = random_design.get_samples(n)
+        formulas = unparse(population)
+        for phi in formulas:
+            obligation = Obligation.fromPCTL(reformat(phi[0]))
+            validity = checkObligation(auto, obligation)
+            if validity:
+                valid.append(phi[0])
+                if len(valid) >= n:
+                    break
+    return np.array(valid).reshape(-1, 1)
+
+
+def collect_eval(best_x, best_fit, rand_x, model):
+    # the formulas
+    xs = np.vstack((best_x, rand_x))
+    # the evaluator's score for each formula
+    ys = np.zeros(xs.shape)
+    # the model's score for each formula
+    zs = np.vstack((best_fit, np.zeros(best_fit.shape)))
+    n = len(best_x) + len(rand_x)
+    choices = np.arange(n)
+    np.random.shuffle(choices)
+    for i in choices:
+        ys[i][0] = query(xs[i][0])
+        if i >= len(best_x):
+            zs[i][0] = model.predict(np.array([xs[i]]))[0]
+    return xs, ys, zs
 
 
 if __name__ == "__main__":
