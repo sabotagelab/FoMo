@@ -236,7 +236,7 @@ def explore_formulas(auto, propositions=None, init_query_size=10, online_query_s
     # X_init_strings = unparse(X_init)
 
     # get initial formulas and interests
-    # xs, ys = init_query(init_query_size, ctl_parser, max_length)
+    xs, ys = init_query(init_query_size, ctl_parser, max_length)
     # for testing, set up dummy inputs and outputs
     # xs = ["EG name=7", "EF AX name=7", "AG name=7", "AF EX name=7", "EX name=0", "EX name=1", "EF AG name=11",
     #       "name=0", "A[ ! name=11 U name=0 ]", "A[ name=5 U name=0 ]"]
@@ -244,12 +244,12 @@ def explore_formulas(auto, propositions=None, init_query_size=10, online_query_s
     #       "! P <= 0.7 [ ( F name=10 ) => ( F name=11 ) ]", "P >= 1.0 [ ( F name=0 ) ]", "P <= 0 [ ! ( X name=1 ) ]",
     #       "P >= 0.7 [ ( X name=4 ) ]", "P <= 0 [ ( F name=11 ) & ( F name=7 ) ]",
     #       "P <= 1.0 [ ( ! ( name=11 ) U name=0 ) ]", "P <= 1.0 [ ( name=5 U name=0 ) ]"]
-    xs = ["! P >= 0.2 [ ( F name=0 ) ]", "P >= 0.5 [ ( F name=14 ) ]",
-          "P <= 0.5 [ ( F name=0 ) ]", "! P <= 0.8 [ ( F name=14 ) ]",
-          "! P <= 0.7 [ ( X X X X X X name=14 ) ]"]
-    xs = [deformat(x) for x in xs]
+    # xs = ["! P >= 0.2 [ ( F name=0 ) ]", "P >= 0.5 [ ( F name=14 ) ]",
+    #       "P <= 0.5 [ ( F name=0 ) ]", "! P <= 0.8 [ ( F name=14 ) ]",
+    #       "! P <= 0.7 [ ( X X X X X X name=14 ) ]"]
+    # xs = [deformat(x) for x in xs]
     # ys = [1 - 78 / 100, 1 - 70 / 100, 1 - 90 / 100, 1 - 74 / 100, 1 - 0, 1 - 0, 1 - 58 / 100, 1 - 0, 1 - 0, 1 - 0]
-    ys = [1 - 95/100, 1 - 95/100, 1 - 85/100, 1 - 89/100, 1 - 87/100]
+    # ys = [1 - 95/100, 1 - 95/100, 1 - 85/100, 1 - 89/100, 1 - 87/100]
 
     xs = np.array(xs).reshape(-1, 1)
     ys = np.array(ys).reshape(-1, 1)
@@ -258,8 +258,8 @@ def explore_formulas(auto, propositions=None, init_query_size=10, online_query_s
     # np.random.seed(123)
     # TODO: exorcise demons from the sampling method.
     model = SSK_model(space, xs, ys, max_subsequence_length=8, n_restarts=5, observation_noise=True)
-    with open("bayesopt_loop_SSK.model-cliffworld.pkl", 'rb') as f:
-        model = pickle.load(f)
+    # with open("bayesopt_loop_SSK.model-cliffworld.pkl", 'rb') as f:
+    #     model = pickle.load(f)
     # load acquisition function
     # TODO: include some jitter in EI?
     # expected_improvement = ExpectedImprovement(model, jitter=0.8)
@@ -287,7 +287,7 @@ def explore_formulas(auto, propositions=None, init_query_size=10, online_query_s
     bayesopt_loop_SSK.iteration_end_event.append(summary)
     # run BO loop
     stop_crit = FixedIterationsStoppingCondition(i_max=online_query_size)
-    # bayesopt_loop_SSK.run_loop(objective, stop_crit)
+    bayesopt_loop_SSK.run_loop(objective, stop_crit)
     print("Generating Best Valid Formulas")
     pr = profile.Profile()
     pr.disable()
