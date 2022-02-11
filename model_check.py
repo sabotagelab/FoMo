@@ -520,6 +520,7 @@ class Automaton(object):
         :return:
         """
         # convert graph to PRISM model
+        # TODO: switch to Storm to minimize IO operations for (potential) massive speed-up
         self.convertToPRISM(m_file, p_file, x)
         # TODO: extract this and make it easier to change
         prism = "/home/colin/prism-4.7-linux64/bin/prism"

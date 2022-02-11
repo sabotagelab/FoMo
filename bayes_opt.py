@@ -26,6 +26,7 @@ from emukit.bayesian_optimization.acquisitions import ExpectedImprovement
 from emukit.core.loop import FixedIterationsStoppingCondition
 
 from nltk import ChartParser
+from tqdm import tqdm
 
 # import BOSS code
 from boss.code.CFG.CFG import Grammar
@@ -236,7 +237,10 @@ def explore_formulas(auto, propositions=None, init_query_size=10, online_query_s
     # X_init_strings = unparse(X_init)
 
     # get initial formulas and interests
-    xs, ys = init_query(init_query_size, ctl_parser, max_length)
+    # xs, ys = init_query(init_query_size, ctl_parser, max_length)
+    # xs = random_valid_formulas(space, auto, 10)
+    # ys = objective(xs)
+
     # for testing, set up dummy inputs and outputs
     # xs = ["EG name=7", "EF AX name=7", "AG name=7", "AF EX name=7", "EX name=0", "EX name=1", "EF AG name=11",
     #       "name=0", "A[ ! name=11 U name=0 ]", "A[ name=5 U name=0 ]"]
@@ -251,19 +255,19 @@ def explore_formulas(auto, propositions=None, init_query_size=10, online_query_s
     # ys = [1 - 78 / 100, 1 - 70 / 100, 1 - 90 / 100, 1 - 74 / 100, 1 - 0, 1 - 0, 1 - 58 / 100, 1 - 0, 1 - 0, 1 - 0]
     # ys = [1 - 95/100, 1 - 95/100, 1 - 85/100, 1 - 89/100, 1 - 87/100]
 
-    xs = np.array(xs).reshape(-1, 1)
-    ys = np.array(ys).reshape(-1, 1)
+    # xs = np.array(xs).reshape(-1, 1)
+    # ys = np.array(ys).reshape(-1, 1)
     # build BO loop with SSK model
     # model = SSK_model(space, xs, ys, max_subsequence_length=5, n_restarts=3)
     # np.random.seed(123)
     # TODO: exorcise demons from the sampling method.
-    model = SSK_model(space, xs, ys, max_subsequence_length=8, n_restarts=5, observation_noise=True)
-    # with open("bayesopt_loop_SSK.model-cliffworld.pkl", 'rb') as f:
-    #     model = pickle.load(f)
+    # model = SSK_model(space, xs, ys, max_subsequence_length=8, n_restarts=5, observation_noise=True)
+    with open("bayesopt_loop_SSK.model-cliffworld.pkl", 'rb') as f:
+        model = pickle.load(f)
     # load acquisition function
     # TODO: include some jitter in EI?
-    # expected_improvement = ExpectedImprovement(model, jitter=0.8)
-    expected_improvement = ExpectedImprovement(model)
+    expected_improvement = ExpectedImprovement(model, jitter=0.4)
+    # expected_improvement = ExpectedImprovement(model)
     # use GA to optimize acquisition function
     # optimizer = GrammarGeneticProgrammingOptimizer(space,
     #                                                dynamic=True,
@@ -271,18 +275,19 @@ def explore_formulas(auto, propositions=None, init_query_size=10, online_query_s
     #                                                tournament_prob=0.5,
     #                                                p_crossover=0.8,
     #                                                p_mutation=0.1)
-    optimizer = GrammarGeneticProgrammingOptimizer(space,
-                                                   dynamic=True,
-                                                   population_size=100,
-                                                   tournament_prob=0.5,
-                                                   p_crossover=0.8,
-                                                   p_mutation=0.1)
+    optimizer = GrammarGeneticValidityOptimizer(space, auto,
+                                                dynamic=True,
+                                                population_size=100,
+                                                tournament_prob=0.5,
+                                                p_crossover=0.8,
+                                                p_mutation=0.1)
     # define BO loop
     bayesopt_loop_SSK = BayesianOptimizationLoop(model=model,
                                                  space=space,
                                                  acquisition=expected_improvement,
                                                  acquisition_optimizer=optimizer)
-
+    # tell the optimizer which loop it's working with
+    optimizer.set_outer_loop(bayesopt_loop_SSK)
     # add loop summary
     bayesopt_loop_SSK.iteration_end_event.append(summary)
     # run BO loop
@@ -291,19 +296,19 @@ def explore_formulas(auto, propositions=None, init_query_size=10, online_query_s
     print("Generating Best Valid Formulas")
     pr = profile.Profile()
     pr.disable()
-    validity_optimizer = GrammarGeneticValidityOptimizer(space,
-                                                         dynamic=True,
-                                                         population_size=100,
-                                                         tournament_prob=0.5,
-                                                         p_crossover=0.8,
-                                                         p_mutation=0.1)
+    # validity_optimizer = GrammarGeneticValidityOptimizer(space, auto,
+    #                                                      dynamic=True,
+    #                                                      population_size=100,
+    #                                                      tournament_prob=0.5,
+    #                                                      p_crossover=0.8,
+    #                                                      p_mutation=0.1)
     pr.enable()
-    best_x, best_fit = validity_optimizer.get_best_valid(expected_improvement, auto, n=10)
+    best_x, best_fit = optimizer.get_best_valid(expected_improvement, n=10)
     pr.disable()
     best_x = np.array(best_x)
     rand_x = random_valid_formulas(space, auto, n=10)
     xs, ys, zs = collect_eval(best_x, best_fit, rand_x, bayesopt_loop_SSK.model)
-    with open("experiment_cliffworld_1.pkl", "wb") as f:
+    with open("valid_experiment_cliffworld_0.pkl", "wb") as f:
         pickle.dump((xs, ys, zs), f)
     print("Done")
     pr.dump_stats('profile.pstat')
@@ -337,7 +342,7 @@ def query(x):
         else:
             print("Invalid Value: please input a number between 0 and 100.")
     # return 1-interest so we're minimizing
-    return 1 - y_out / 100
+    return 1 - y_out / 101
 
 
 def objective(X):
@@ -388,17 +393,24 @@ def init_query(init_size, parser, max_length):
 
 def random_valid_formulas(space, auto, n):
     valid = []
+    invalid = []
     random_design = RandomDesign(space)
+    pbar = tqdm(total=n)
     while len(valid) < n:
         population = random_design.get_samples(n)
         formulas = unparse(population)
         for phi in formulas:
-            obligation = Obligation.fromPCTL(reformat(phi[0]))
-            validity = checkObligation(auto, obligation)
-            if validity:
-                valid.append(phi[0])
-                if len(valid) >= n:
-                    break
+            if phi[0] not in invalid:
+                obligation = Obligation.fromPCTL(reformat(phi[0]))
+                validity = checkObligation(auto, obligation)
+                if validity:
+                    valid.append(phi[0])
+                    pbar.update()
+                    if len(valid) >= n:
+                        break
+                else:
+                    invalid.append(phi[0])
+    pbar.close()
     return np.array(valid).reshape(-1, 1)
 
 
