@@ -16,6 +16,7 @@ by Henry B. Moss, Daniel Beck, Javier Gonzalez, David S. Leslie, Paul Rayson
 import pickle
 import time
 import timeit
+import chime
 import numpy as np
 import cProfile as profile
 
@@ -238,8 +239,8 @@ def explore_formulas(auto, propositions=None, init_query_size=10, online_query_s
 
     # get initial formulas and interests
     # xs, ys = init_query(init_query_size, ctl_parser, max_length)
-    # xs = random_valid_formulas(space, auto, 10)
-    # ys = objective(xs)
+    xs = random_valid_formulas(space, auto, 10)
+    ys = objective(xs)
 
     # for testing, set up dummy inputs and outputs
     # xs = ["EG name=7", "EF AX name=7", "AG name=7", "AF EX name=7", "EX name=0", "EX name=1", "EF AG name=11",
@@ -255,15 +256,15 @@ def explore_formulas(auto, propositions=None, init_query_size=10, online_query_s
     # ys = [1 - 78 / 100, 1 - 70 / 100, 1 - 90 / 100, 1 - 74 / 100, 1 - 0, 1 - 0, 1 - 58 / 100, 1 - 0, 1 - 0, 1 - 0]
     # ys = [1 - 95/100, 1 - 95/100, 1 - 85/100, 1 - 89/100, 1 - 87/100]
 
-    # xs = np.array(xs).reshape(-1, 1)
-    # ys = np.array(ys).reshape(-1, 1)
+    xs = np.array(xs).reshape(-1, 1)
+    ys = np.array(ys).reshape(-1, 1)
     # build BO loop with SSK model
     # model = SSK_model(space, xs, ys, max_subsequence_length=5, n_restarts=3)
     # np.random.seed(123)
     # TODO: exorcise demons from the sampling method.
-    # model = SSK_model(space, xs, ys, max_subsequence_length=8, n_restarts=5, observation_noise=True)
-    with open("bayesopt_loop_SSK.model-cliffworld.pkl", 'rb') as f:
-        model = pickle.load(f)
+    model = SSK_model(space, xs, ys, max_subsequence_length=8, n_restarts=5, observation_noise=True)
+    # with open("bayesopt_loop_SSK.model-cliffworld.pkl", 'rb') as f:
+    #     model = pickle.load(f)
     # load acquisition function
     # TODO: include some jitter in EI?
     expected_improvement = ExpectedImprovement(model, jitter=0.4)
@@ -308,7 +309,7 @@ def explore_formulas(auto, propositions=None, init_query_size=10, online_query_s
     best_x = np.array(best_x)
     rand_x = random_valid_formulas(space, auto, n=10)
     xs, ys, zs = collect_eval(best_x, best_fit, rand_x, bayesopt_loop_SSK.model)
-    with open("valid_experiment_cliffworld_0.pkl", "wb") as f:
+    with open("valid_experiment_cliffworld_2.pkl", "wb") as f:
         pickle.dump((xs, ys, zs), f)
     print("Done")
     pr.dump_stats('profile.pstat')
@@ -350,6 +351,7 @@ def objective(X):
     Y = np.zeros((X.shape[0], 1))
     for i in range(X.shape[0]):
         x = X[i][0]
+        chime.info()
         Y[i] = query(x)
     return Y
 
