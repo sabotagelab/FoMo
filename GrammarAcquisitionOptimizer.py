@@ -98,8 +98,8 @@ class GrammarGeneticValidityOptimizer(GrammarGeneticProgrammingOptimizer):
             standardized_fitness_pop, acq_max, X_max, best_x, best_fit, iteration_bests \
                 = self._update_pop(sample_attempts, population, standardized_fitness_pop, acquisition, self.automaton,
                                    i, acq_max, X_max, best_x, iteration_bests)
-            if acq_max[0][0] == max(iteration_bests[:-10]):
-                stop = True
+            # if acq_max[0][0] == max(iteration_bests[:-10]):
+            #     stop = True
             # also stop if ran for 100 evolutions in total
             if j == 100:
                 stop = True

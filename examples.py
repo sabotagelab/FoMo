@@ -337,7 +337,7 @@ def explore_gridworld2():
 
 
 def cliffworld_experiment():
-    gw = setupCliffworld(10)
+    gw = setupCliffworld()
     atoms = []
     state_range = [0] + list(range(5, 20))
     for s in state_range:

@@ -309,7 +309,7 @@ def explore_formulas(auto, propositions=None, init_query_size=10, online_query_s
     best_x = np.array(best_x)
     rand_x = random_valid_formulas(space, auto, n=10)
     xs, ys, zs = collect_eval(best_x, best_fit, rand_x, bayesopt_loop_SSK.model)
-    with open("valid_experiment_cliffworld_2.pkl", "wb") as f:
+    with open("valid_experiment_cliffworld_6.pkl", "wb") as f:
         pickle.dump((xs, ys, zs), f)
     print("Done")
     pr.dump_stats('profile.pstat')
