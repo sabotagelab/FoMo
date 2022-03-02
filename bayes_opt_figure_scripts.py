@@ -52,7 +52,7 @@ def plot_hist(data):
         plt.savefig('score_histogram.pdf')
 
 
-def print_rmse_and_r(data, print_out=True):
+def print_stats(data, print_out=True):
     all_eval_scores = data['Raw Evaluator Score']
     gen_eval_scores = data.query('Random == False')['Raw Evaluator Score']
     rand_eval_scores = data.query('Random == True')['Raw Evaluator Score']
@@ -73,10 +73,37 @@ def print_rmse_and_r(data, print_out=True):
     gen_r = gen_eval_scores.corr(gen_model_scores)
     rand_r = rand_eval_scores.corr(rand_model_scores)
     all_r = all_eval_scores.corr(all_model_scores)
+
+    gen_eval_mean = np.mean(gen_eval_scores)
+    rand_eval_mean = np.mean(rand_eval_scores)
+    all_eval_mean = np.mean(all_eval_scores)
+
+    gen_model_mean = np.mean(gen_model_scores)
+    rand_model_mean = np.mean(rand_model_scores)
+    all_model_mean = np.mean(all_model_scores)
+
+    gen_eval_std = np.std(gen_eval_scores)
+    rand_eval_std = np.std(rand_eval_scores)
+    all_eval_std = np.std(all_eval_scores)
+
+    gen_model_std = np.std(gen_model_scores)
+    rand_model_std = np.std(rand_model_scores)
+    all_model_std = np.std(all_model_scores)
+
     if print_out:
         print("RMSE - Optimized: {0}, Random: {1}, All: {2}".format(gen_rmse, rand_rmse, all_rmse))
         print("PCC - Optimized: {0}, Random: {1}, All: {2}".format(gen_r, rand_r, all_r))
-    return gen_rmse, rand_rmse, all_rmse, gen_r, rand_r, all_r
+        print("Mean Eval Score - Optimized: {0}, Random: {1}, All: {2}".format(gen_eval_mean, rand_eval_mean,
+                                                                               all_eval_mean))
+        print("Mean Model Score - Optimized: {0}, Random: {1}, All: {2}".format(gen_model_mean, rand_model_mean,
+                                                                                all_model_mean))
+        print("Std Eval Score - Optimized: {0}, Random: {1}, All: {2}".format(gen_eval_std, rand_eval_std,
+                                                                              all_eval_std))
+        print("Std Model Score - Optimized: {0}, Random: {1}, All: {2}".format(gen_model_std, rand_model_std,
+                                                                               all_model_std))
+    return gen_rmse, rand_rmse, all_rmse, gen_r, rand_r, all_r, gen_eval_mean, rand_eval_mean, all_eval_mean, \
+           gen_model_mean, rand_model_mean, all_model_mean, gen_eval_std, rand_eval_std, all_eval_std, gen_model_std, \
+           rand_model_std, all_model_std
 
 
 def print_evaluator_stats(num_exp, data):
@@ -87,18 +114,42 @@ def print_evaluator_stats(num_exp, data):
         "RMSE for All Formulas": [],
         "PCC for Optimized Formulas": [],
         "PCC for Random Formulas": [],
-        "PCC for All Formulas": []
+        "PCC for All Formulas": [],
+        "Mean Evaluator Score for Optimized Formulas": [],
+        "Mean Evaluator Score for Random Formulas": [],
+        "Mean Evaluator Score for All Formulas": [],
+        "Mean Model Score for Optimized Formulas": [],
+        "Mean Model Score for Random Formulas": [],
+        "Mean Model Score for All Formulas": [],
+        "Std. of Evaluator Score for Optimized Formulas": [],
+        "Std. of Evaluator Score for Random Formulas": [],
+        "Std. of Evaluator Score for All Formulas": [],
+        "Std. of Model Score for Optimized Formulas": [],
+        "Std. of Model Score for Random Formulas": [],
+        "Std. of Model Score for All Formulas": [],
     }
     for n in range(num_exp):
         query = 'Experiment == ' + str(n + 1)
         exn = data.query(query)
-        stats = print_rmse_and_r(exn, print_out=False)
+        stats = print_stats(exn, print_out=False)
         stat_df_dict["RMSE for Optimized Formulas"].append(stats[0])
         stat_df_dict["RMSE for Random Formulas"].append(stats[1])
         stat_df_dict["RMSE for All Formulas"].append(stats[2])
         stat_df_dict["PCC for Optimized Formulas"].append(stats[3])
         stat_df_dict["PCC for Random Formulas"].append(stats[4])
         stat_df_dict["PCC for All Formulas"].append(stats[5])
+        stat_df_dict["Mean Evaluator Score for Optimized Formulas"].append(stats[6])
+        stat_df_dict["Mean Evaluator Score for Random Formulas"].append(stats[7])
+        stat_df_dict["Mean Evaluator Score for All Formulas"].append(stats[8])
+        stat_df_dict["Mean Model Score for Optimized Formulas"].append(stats[9])
+        stat_df_dict["Mean Model Score for Random Formulas"].append(stats[10])
+        stat_df_dict["Mean Model Score for All Formulas"].append(stats[11])
+        stat_df_dict["Std. of Evaluator Score for Optimized Formulas"].append(stats[12])
+        stat_df_dict["Std. of Evaluator Score for Random Formulas"].append(stats[13])
+        stat_df_dict["Std. of Evaluator Score for All Formulas"].append(stats[14])
+        stat_df_dict["Std. of Model Score for Optimized Formulas"].append(stats[15])
+        stat_df_dict["Std. of Model Score for Random Formulas"].append(stats[16])
+        stat_df_dict["Std. of Model Score for All Formulas"].append(stats[17])
     dfs = pd.DataFrame(stat_df_dict)
     pd.set_option('display.max_columns', None)
     print(dfs)
@@ -181,7 +232,7 @@ if __name__ == '__main__':
 
     print_quartiles(nex, df)
     plot_hist(df)
-    print_rmse_and_r(df)
+    print_stats(df)
     plot_all_scatter(df)
     plot_evaluator_scatter(nex, df)
     print_evaluator_stats(nex, df)
