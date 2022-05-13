@@ -14,7 +14,7 @@ import cvxpy as cp
 
 
 def generateGraph(num_vertices, prob_edges, min_weight, max_weight,
-                  symbols=None):
+                  symbols=None, max_symbols=1):
     # make random graph
     g = Graph.Erdos_Renyi(num_vertices, prob_edges, directed=True, loops=False)
         
@@ -43,10 +43,28 @@ def generateGraph(num_vertices, prob_edges, min_weight, max_weight,
 
     # choose random labels to put on each state
     if symbols:
-        g.vs["label"] = np.random.choice(symbols, g.vcount())
+        if max_symbols > 1:
+            for v in g.vs:
+                # determine the number of labels to put on each state
+                num_symbols = np.random.randint(1, max_symbols+1)
+                # sample those labels, and turn them into a string
+                label = ', '.join(np.random.choice(symbols, num_symbols, replace=False))
+                v["label"] = label
+        else:
+            g.vs["label"] = np.random.choice(symbols, g.vcount())
 
+    state_names = [str(v.index) for v in g.vs]
+    g.vs["name"] = state_names
 
-    # plot(g)
+    # this is inefficient right now, but I might want to add random action assignments in the future, so I'm leaving it.
+    actions = {}
+    for i, edge in enumerate(g.es):
+        actions[i] = [edge.index]
+    for action in actions:
+        for edge in actions[action]:
+            edge = g.es[edge]
+            edge["action"] = action
+
     return g
 
 

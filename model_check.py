@@ -8,7 +8,7 @@ import pickle
 import subprocess
 import numpy as np
 import mdptoolbox.mdp as mdp
-from copy import deepcopy
+from copy import copy, deepcopy
 from itertools import product
 from igraph import *
 from random_weighted_automaton import *
@@ -24,7 +24,7 @@ from random_weighted_automaton import *
 # ^ allow multiple propositions on a given vertex, and be able to check them.
 # TODO: refactor lots of the functions just to simplify them
 class Automaton(object):
-    def __init__(self, graph, initial_state):
+    def __init__(self, graph, initial_state, atomic_propositions=None):
         """
         Create a new Automaton object from an igraph graph object and an initial state.
         The graph should have vertex properties "label" and "name".
@@ -46,6 +46,7 @@ class Automaton(object):
         self.t_previous = []
         self.num_clones = 0
         self.counter = False
+        self.propositions = atomic_propositions
         self.prob = "prob" in self.graph.es.attribute_names()
 
     @classmethod
@@ -509,6 +510,26 @@ class Automaton(object):
             print(out.stdout)
         return check
 
+    def checkLTL(self, file, x, verbose=False):
+        """
+        Checks the automaton for a given LTL specification
+
+        :param file:
+        :param x:
+        :param verbose:
+        :return:
+        """
+        # convert graph to nuXmv model
+        self.convertToNuXmv(file, x, lang="LTL")
+        # TODO: extract this and make it easier to change
+        # nuxmv = "E:\\Programs\\nuXmv-2.0.0-win64\\bin\\nuXmv.exe"
+        nuxmv = "/home/colin/Downloads/nuXmv-2.0.0-Linux/bin/nuXmv"
+        out = subprocess.run([nuxmv, file], stdout=subprocess.PIPE)
+        check = "true" in str(out.stdout)
+        if verbose:
+            print(out.stdout)
+        return check
+
     def checkPCTL(self, m_file, p_file, x, verbose=False):
         """
         Checks the automaton for a given PCTL specification
@@ -530,7 +551,7 @@ class Automaton(object):
             print(out.stdout)
         return check
 
-    # TODO: checkLTL by lang="LTL", tag a spec with CTL or LTL, and do CTL* by logical functions of CTL and LTL formulas
+    # TODO: checkLTL by lang="LTL", tag a spec with CTL or LTL
     def checkToCTL(self, file, x, negate=False, verbose=False):
         """
         Checks an automaton for a CTL specification, given an LTL specification.
@@ -648,6 +669,12 @@ class Automaton(object):
             end = str(self.counter[2])
             f.write("VAR " + c_name + " : " + start + " .. " + end + ";\n\n")
 
+        # if auto has labels
+        if 'label' in self.graph.vs.attributes():
+            # ... then write the label var
+            labels_size = str(len(self.propositions))
+            f.write("VAR label: unsigned word[" + labels_size + "];\n\n")
+
     def _writePropTransNuXmv(self, f):
         # if auto has a counter
         if self.counter:
@@ -657,6 +684,61 @@ class Automaton(object):
             f.write(" init(" + c + ") := " + str(self.counter[1]) + ";\n")
             f.write(" next(" + c + ") := (" + c + "<" + t + ")?(" + c + "+1):(" +
                     c + ");\n\n")
+
+        # if auto has labels
+        if 'label' in self.graph.vs.attributes():
+            # set up translation between label strings and bit strings.
+            # bit strings get used in nuXmv to represent which propositions a state has.
+            # e.g. if the language has 4 propositions ['p', 'q', 'r', 's'], and state 0 has propositions "p, s",
+            # then the bit string representing the labels of state 0 would be 0ub8_1001.
+            word_size = len(self.propositions)
+            no_labels = [0] * len(self.propositions)
+            prop_dict = {}
+            for i, prop in enumerate(self.propositions):
+                label_bits = copy(no_labels)
+                label_bits[i] = 1
+                prop_dict[prop] = label_bits
+
+            # set initial label
+            # get the string representation of state labels, e.g. "p, s"
+            init_props = self.graph.vs["label"][self.q0].split(', ')
+            # get a list of bit string representations for each proposition, e.g. [[1, 0, 0, 0], [0, 0, 0, 1]]
+            init_props_bits = [prop_dict[prop] for prop in init_props]
+            # combine those bit string representations into a single bit string, e.g. ['1', '0', '0', '1']
+            init_label = [str(sum(bits)) for bits in zip(*init_props_bits)]
+            # join those bits into a string, e.g. "1001"
+            init_label_str = ''.join(init_label)
+            f.write(" init(label) := 0ub" + str(word_size) + "_" + str(init_label_str) + ";\n")
+            # define label transitions
+            f.write(" next(label) :=\n")
+            f.write("  case\n")
+            # for each vertex...
+            for v in self.graph.vs:
+                # ... get that vertex's propositions
+                v_props = v["label"].split(', ')
+                # then a list of bits
+                v_props_bits = [prop_dict[prop] for prop in v_props]
+                # combine those into a bit string
+                v_label = [str(sum(bits)) for bits in zip(*v_props_bits)]
+                v_label_str = ''.join(v_label)
+                # and get a string rep of this vertex
+                state = str(v.index)
+                # and write out the transitions to the case based on next state
+                f.write("   next(state) = " + state + " : 0ub" + str(word_size) + "_" + v_label_str + ";\n")
+            # default case
+            f.write("   TRUE : label;\n")
+            f.write("  esac;\n")
+            f.write("\n")
+
+            # define relationship between bit words and original propositions
+            f.write("DEFINE\n")
+            for prop in self.propositions:
+                # build logical equivalence string
+                logical_bits = prop_dict[prop]
+                logical_bits = ''.join([str(bit) for bit in logical_bits])
+                f.write(" " + str(prop) + " := (0ub" + str(word_size) + "_" + logical_bits + " & label) = 0ub" +
+                        str(word_size) + "_" + logical_bits + ";\n")
+            f.write("\n")
 
     def convertToPRISM(self, m_file, p_file, x):
         """
