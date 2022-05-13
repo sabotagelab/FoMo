@@ -14,7 +14,6 @@ Generate unsatisfying formulas for a NFA.
 
 import multiprocessing
 
-from nltk import ChartParser
 from tqdm import trange, tqdm
 from joblib import Parallel, delayed
 
@@ -25,7 +24,7 @@ from boss.code.CFG.CFG import Grammar
 from boss.code.parameters.cfg_parameter import CFGParameter
 from boss.code.parameters.cfg_parameter import unparse
 
-from random_weighted_automaton import generateGraph, generateHistories
+from random_weighted_automaton import generateGraph, generateHistory
 from bayes_opt import reformat
 from model_check import Automaton
 
@@ -51,10 +50,11 @@ def generate_automaton(num_vertices, prob_edges, symbols=None, max_symbols=1):
 
 
 def generate_traces(graph, num_traces, trace_len):
-    return generateHistories(graph, num_traces, trace_len, 0)
+    return generateHistory(graph, graph.es["weight"], trace_len, 0)
 
 
 def generate_formula(automaton, grammar, max_formula_length, satisfying=True):
+    # TODO: consider replacing sampling with uniform random
     space = ParameterSpace([CFGParameter("grammar", grammar, max_length=max_formula_length, min_length=0)])
     valid_formula = None
     invalid_formulas = []

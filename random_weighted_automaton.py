@@ -73,12 +73,12 @@ def generateHistories(graph, num_histories, history_len, discount_factor):
     # generate some histories
     weights = graph.es["weight"]
     num_cores = multiprocessing.cpu_count()
-    histories = Parallel(n_jobs=num_cores,verbose=5)(delayed(_perHistory)(graph, weights, i, history_len, discount_factor) for i in trange(num_histories))
+    histories = Parallel(n_jobs=num_cores,verbose=5)(delayed(generateHistory)(graph, weights, history_len, discount_factor) for i in trange(num_histories))
 
     return histories
     
     
-def _perHistory(graph, weights, i, history_len, discount_factor):
+def generateHistory(graph, weights, history_len, discount_factor):
     # perform random walk on given graph, starting at node "1"
     walk = graph.random_walk(0, history_len)
     # perform random walk on given graph, starting from random node
