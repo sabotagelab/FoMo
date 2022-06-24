@@ -49,8 +49,8 @@ def generate_automaton(num_vertices, prob_edges, symbols=None, max_symbols=1):
     return Automaton(graph, 0, symbols)
 
 
-def generate_traces(graph, num_traces, trace_len):
-    return generateHistory(graph, graph.es["weight"], trace_len, 0)
+def generate_trace(graph, trace_len):
+    return generateHistory(graph, graph.es["weight"], trace_len, 0)[2]
 
 
 def generate_formula(automaton, grammar, max_formula_length, satisfying=True):
@@ -85,7 +85,7 @@ if __name__ == "__main__":
     grammar_str = grammar_str + prop_str
     gram = Grammar.fromstring(grammar_str)
     auto = generate_automaton(20, 0.3, symbols=propositions, max_symbols=4)
-    traces = generate_traces(auto.graph, 10, 10)
+    traces = generate_trace(auto.graph, 10)
     sat_formula = generate_formula(auto, gram, 20)
     unsat_formula = generate_formula(auto, gram, 20, False)
     print(traces)
