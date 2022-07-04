@@ -595,8 +595,9 @@ class Automaton(object):
             self._writePropTransNuXmv(f)
 
             # Specification
-            f.write(lang.upper() + "SPEC " + x + ";")
-            f.write("\n")
+            if x:
+                f.write(lang.upper() + "SPEC " + x + ";")
+                f.write("\n")
 
     def _writeStatesNuXmv(self, f):
         sep = ', '
