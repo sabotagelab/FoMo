@@ -13,6 +13,8 @@ Generate unsatisfying formulas for a NFA.
 """
 
 import multiprocessing
+import csv
+import random
 
 from tqdm import trange, tqdm
 from joblib import Parallel, delayed
@@ -53,7 +55,7 @@ def generate_trace(graph, trace_len):
     return generateHistory(graph, graph.es["weight"], trace_len, 0)[2]
 
 
-def generate_formula(automaton, grammar, max_formula_length, satisfying=True):
+def generate_formula(automaton, grammar, max_formula_length, satisfying=True, smv_file="temp.smv"):
     # TODO: consider replacing sampling with uniform random
     space = ParameterSpace([CFGParameter("grammar", grammar, max_length=max_formula_length, min_length=0)])
     valid_formula = None
@@ -63,16 +65,31 @@ def generate_formula(automaton, grammar, max_formula_length, satisfying=True):
         candidate_formula = random_design.get_samples(1)
         candidate_formula = unparse(candidate_formula)
         if candidate_formula not in invalid_formulas:
-            # TODO: check the indexing here
             formula = reformat(candidate_formula[0][0])
             if not satisfying:
                 formula = "! ( " + formula + " )"
-            validity = automaton.checkLTL("temp.smv", formula)
+            validity = automaton.checkLTL(smv_file, formula)
             if validity:
                 valid_formula = candidate_formula[0][0]
             else:
                 invalid_formulas.append(candidate_formula)
     return reformat(valid_formula)
+
+
+def generate_mfl_entry(props, grammar, auto_size, auto_connect, max_symbols, formula_length, model_file):
+    coin = [True, False]
+    auto = generate_automaton(auto_size, auto_connect, symbols=props, max_symbols=max_symbols)
+    model = auto.convertToNuXmv(model_file, x=None, lang="LTL", return_string=True)
+    formula = ""
+    label = ""
+    flip = random.choice(coin)
+    if flip:
+        label = "1"
+        formula = generate_formula(auto, grammar, formula_length, smv_file=model_file)
+    else:
+        label = "0"
+        formula = generate_formula(auto, grammar, formula_length, False, smv_file=model_file)
+    return [model, formula, label]
 
 
 if __name__ == "__main__":
@@ -84,10 +101,26 @@ if __name__ == "__main__":
     prop_str = " | ".join(['"' + proposition + '"' for proposition in model_propositions])
     grammar_str = grammar_str + prop_str
     gram = Grammar.fromstring(grammar_str)
-    auto = generate_automaton(20, 0.3, symbols=propositions, max_symbols=4)
-    traces = generate_trace(auto.graph, 10)
-    sat_formula = generate_formula(auto, gram, 20)
-    unsat_formula = generate_formula(auto, gram, 20, False)
-    print(traces)
-    print(sat_formula)
-    print(unsat_formula)
+    test_auto = generate_automaton(20, 0.3, symbols=propositions, max_symbols=4)
+    test_formula = generate_formula(test_auto, gram, 20)
+
+    data_size = 32
+    data_file = "data/deep_verify_data.csv"
+    # entries = []
+    # for _ in trange(data_size):
+    #     entry = generate_mfl_entry(propositions, gram, 20, 0.3, 4, 20, "temp.smv")
+    #     entries.append(entry)
+    num_cores = multiprocessing.cpu_count()
+    entries = Parallel(n_jobs=1, verbose=10)(delayed(generate_mfl_entry)(propositions, gram, 20, 0.3, 4, 20, "model_files/temp"+str(i)+".smv") for i in range(data_size))
+
+    with open(data_file, 'w', newline='') as csvfile:
+        datawriter = csv.writer(csvfile)
+        datawriter.writerows(entries)
+
+    # auto = generate_automaton(20, 0.3, symbols=propositions, max_symbols=4)
+    # traces = generate_trace(auto.graph, 10)
+    # sat_formula = generate_formula(auto, gram, 20)
+    # unsat_formula = generate_formula(auto, gram, 20, False)
+    # print(traces)
+    # print(sat_formula)
+    # print(unsat_formula)

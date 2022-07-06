@@ -567,14 +567,20 @@ class Automaton(object):
         else:
             return self.checkCTL(file, 'A' + x, verbose=verbose)
 
-    def convertToNuXmv(self, file, x, lang="CTL"):
+    def convertToNuXmv(self, file, x=None, lang="CTL", return_string=False):
         """
         Produces a NuXmv input file specifying this automaton.
         :param file:
         :param x:
+        :param return_string:
         :return:
         """
-        with open(file, 'w') as f:
+
+        open_mode = 'w'
+
+        out_str = ""
+
+        with open(file, open_mode) as f:
             f.write("MODULE main\n\n")
             self._writeStatesNuXmv(f)
 
@@ -598,6 +604,11 @@ class Automaton(object):
             if x:
                 f.write(lang.upper() + "SPEC " + x + ";")
                 f.write("\n")
+
+        if return_string:
+            with open(file, 'r') as f:
+                out_str = f.read()
+            return out_str
 
     def _writeStatesNuXmv(self, f):
         sep = ', '
