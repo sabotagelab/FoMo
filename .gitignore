@@ -2,6 +2,10 @@
 __pycache__/*
 *.graphml
 venv/*
+src/*
+deepverify/*
+dask-worker-space/*
+data/*
 .idea/workspace.xml
 .idea/vcs.xml
 .idea/other.xml
@@ -9,6 +13,10 @@ venv/*
 .idea/misc.xml
 .idea/autonomous-learning.iml
 __pycache__/random_weighted_automaton.cpython-35.pyc
+nuXmv
+*.out
+*.err
+*.csv
 *.svg
 *.png
 *.pdf

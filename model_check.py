@@ -493,7 +493,8 @@ class Automaton(object):
         # nuxmv = "nuXmv"
         # TODO: extract this and make it easier to change
         # nuxmv = "E:\\Programs\\nuXmv-2.0.0-win64\\bin\\nuXmv.exe"
-        nuxmv = "/home/colin/Downloads/nuXmv-2.0.0-Linux/bin/nuXmv"
+        # nuxmv = "/home/colin/Downloads/nuXmv-2.0.0-Linux/bin/nuXmv"
+        nuxmv = "nuXmv"
 
         # with open("cmd.txt", 'w') as f:
         #     f.write("read_model -i " + file + "\n")
@@ -523,7 +524,8 @@ class Automaton(object):
         self.convertToNuXmv(file, x, lang="LTL")
         # TODO: extract this and make it easier to change
         # nuxmv = "E:\\Programs\\nuXmv-2.0.0-win64\\bin\\nuXmv.exe"
-        nuxmv = "/home/colin/Downloads/nuXmv-2.0.0-Linux/bin/nuXmv"
+        # nuxmv = "/home/colin/Downloads/nuXmv-2.0.0-Linux/bin/nuXmv"
+        nuxmv = "nuXmv"
         out = subprocess.run([nuxmv, file], stdout=subprocess.PIPE)
         check = "true" in str(out.stdout)
         if verbose:

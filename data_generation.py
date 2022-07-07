@@ -16,8 +16,10 @@ import multiprocessing
 import csv
 import random
 
+from dask_jobqueue import SLURMCluster
+from dask.distributed import Client
 from tqdm import trange, tqdm
-from joblib import Parallel, delayed
+from joblib import Parallel, delayed, parallel_backend
 
 from emukit.core import ParameterSpace
 from emukit.core.initial_designs import RandomDesign
@@ -57,20 +59,21 @@ def generate_trace(graph, trace_len):
 
 def generate_formula(automaton, grammar, max_formula_length, satisfying=True, smv_file="temp.smv"):
     # TODO: consider replacing sampling with uniform random
-    space = ParameterSpace([CFGParameter("grammar", grammar, max_length=max_formula_length, min_length=0)])
+    # space = ParameterSpace([CFGParameter("grammar", grammar, max_length=max_formula_length, min_length=0)])
     valid_formula = None
     invalid_formulas = []
-    random_design = RandomDesign(space)
+    # random_design = RandomDesign(space)
     while not valid_formula:
-        candidate_formula = random_design.get_samples(1)
+        # candidate_formula = random_design.get_samples(1)
+        candidate_formula = grammar.sampler_restricted(1, max_formula_length, 0.5)
         candidate_formula = unparse(candidate_formula)
         if candidate_formula not in invalid_formulas:
-            formula = reformat(candidate_formula[0][0])
+            formula = reformat(candidate_formula[0])
             if not satisfying:
                 formula = "! ( " + formula + " )"
             validity = automaton.checkLTL(smv_file, formula)
             if validity:
-                valid_formula = candidate_formula[0][0]
+                valid_formula = candidate_formula[0]
             else:
                 invalid_formulas.append(candidate_formula)
     return reformat(valid_formula)
@@ -93,7 +96,7 @@ def generate_mfl_entry(props, grammar, auto_size, auto_connect, max_symbols, for
 
 
 if __name__ == "__main__":
-    propositions = ['p', 'q', 'r', 's']
+    propositions = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'p', 'q', 'r', 's']
     model_propositions = []
     for prop in propositions:
         model_propositions.append(str(prop))
@@ -101,17 +104,32 @@ if __name__ == "__main__":
     prop_str = " | ".join(['"' + proposition + '"' for proposition in model_propositions])
     grammar_str = grammar_str + prop_str
     gram = Grammar.fromstring(grammar_str)
-    test_auto = generate_automaton(20, 0.3, symbols=propositions, max_symbols=4)
-    test_formula = generate_formula(test_auto, gram, 20)
+    # test_auto = generate_automaton(20, 0.3, symbols=propositions, max_symbols=4)
+    # test_formula = generate_formula(test_auto, gram, 20)
 
-    data_size = 32
+    cluster = SLURMCluster(
+        queue='eecs',
+	project='eecs',
+	cores=10,
+	memory='24GB',
+	shebang="#!/bin/bash",
+	n_workers=20,
+	walltime='24:00:00',
+	job_extra=['-o generate_data.out', '-e generate_data.err', '--mail-user=sheablyc@oregonstate.edu', '--mail-type=ALL'],
+    )
+    print(cluster.dashboard_link)
+    client = Client(cluster.scheduler_address)
+
+    data_size = 2048
     data_file = "data/deep_verify_data.csv"
     # entries = []
     # for _ in trange(data_size):
     #     entry = generate_mfl_entry(propositions, gram, 20, 0.3, 4, 20, "temp.smv")
     #     entries.append(entry)
     num_cores = multiprocessing.cpu_count()
-    entries = Parallel(n_jobs=1, verbose=10)(delayed(generate_mfl_entry)(propositions, gram, 20, 0.3, 4, 20, "model_files/temp"+str(i)+".smv") for i in range(data_size))
+
+    with parallel_backend('dask', wait_for_workers_timeout=60):
+        entries = Parallel()(delayed(generate_mfl_entry)(propositions, gram, 20, 0.3, 11, 20, "model_files/temp"+str(i)+".smv") for i in trange(data_size))
 
     with open(data_file, 'w', newline='') as csvfile:
         datawriter = csv.writer(csvfile)
