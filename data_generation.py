@@ -109,13 +109,13 @@ if __name__ == "__main__":
 
     cluster = SLURMCluster(
         queue='eecs',
-	project='eecs',
-	cores=10,
-	memory='24GB',
-	shebang="#!/bin/bash",
-	n_workers=20,
-	walltime='24:00:00',
-	job_extra=['-o generate_data.out', '-e generate_data.err', '--mail-user=sheablyc@oregonstate.edu', '--mail-type=ALL'],
+        project='eecs',
+        cores=10,
+        memory='24GB',
+        shebang="#!/bin/bash",
+        n_workers=20,
+        walltime='24:00:00',
+        job_extra=['-o generate_data.out', '-e generate_data.err', '--mail-user=sheablyc@oregonstate.edu', '--mail-type=ALL'],
     )
     print(cluster.dashboard_link)
     client = Client(cluster.scheduler_address)
