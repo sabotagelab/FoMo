@@ -5,7 +5,7 @@ venv/*
 src/*
 deepverify/*
 dask-worker-space/*
-data/*
+data/*.csv
 .idea/workspace.xml
 .idea/vcs.xml
 .idea/other.xml

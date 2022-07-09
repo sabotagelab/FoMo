@@ -111,7 +111,7 @@ if __name__ == "__main__":
         queue='eecs',
 	project='eecs',
 	cores=10,
-	memory='24GB',
+	memory='48GB',
 	shebang="#!/bin/bash",
 	n_workers=20,
 	walltime='24:00:00',
@@ -120,7 +120,7 @@ if __name__ == "__main__":
     print(cluster.dashboard_link)
     client = Client(cluster.scheduler_address)
 
-    data_size = 2048
+    data_size = 2**16
     data_file = "data/deep_verify_data.csv"
     # entries = []
     # for _ in trange(data_size):
@@ -128,7 +128,7 @@ if __name__ == "__main__":
     #     entries.append(entry)
     num_cores = multiprocessing.cpu_count()
 
-    with parallel_backend('dask', wait_for_workers_timeout=60):
+    with parallel_backend('dask', wait_for_workers_timeout=120):
         entries = Parallel()(delayed(generate_mfl_entry)(propositions, gram, 20, 0.3, 11, 20, "model_files/temp"+str(i)+".smv") for i in trange(data_size))
 
     with open(data_file, 'w', newline='') as csvfile:
