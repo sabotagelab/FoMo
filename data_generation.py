@@ -73,8 +73,8 @@ def generate_formula(automaton, grammar, max_formula_length, satisfying=True, sm
     # TODO: consider replacing sampling with uniform random
     valid_formula = None
     invalid_formulas = []
+    formula_size = random.randint(1, max_formula_length)
     if not spot_imported:
-        formula_size = random.randint(1, max_formula_length)
         cfactor = max(math.exp(-100/formula_size), 10**-1)
         while not valid_formula:
             candidate_formula = grammar.sampler_restricted(1, formula_size, cfactor, max_formula_length)
@@ -90,7 +90,7 @@ def generate_formula(automaton, grammar, max_formula_length, satisfying=True, sm
         seed = int.from_bytes(os.urandom(2), byteorder="big")
         # TODO: do tree_size like random formula size?
         ltl_properties = 'false=0,true=0,equiv=0,R=0,W=0,M=0'
-        formula_generator = spot.randltl(grammar, seed=seed, tree_size=(1, max_formula_length), ltl_properties=ltl_properties)
+        formula_generator = spot.randltl(grammar, seed=seed, tree_size=formula_size, ltl_properties=ltl_properties)
         while not valid_formula:
             candidate_formula = str(next(formula_generator))
             validity = automaton.checkLTL(smv_file, candidate_formula)
