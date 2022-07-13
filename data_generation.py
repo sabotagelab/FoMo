@@ -15,7 +15,11 @@ Generate unsatisfying formulas for a NFA.
 import multiprocessing
 import csv
 import random
+import os
 
+from collections import defaultdict
+
+import matplotlib.pyplot as plt
 from dask_jobqueue import SLURMCluster
 from dask.distributed import Client
 from tqdm import trange, tqdm
@@ -59,20 +63,16 @@ def generate_trace(graph, trace_len):
 
 def generate_formula(automaton, grammar, max_formula_length, satisfying=True, smv_file="temp.smv"):
     # TODO: consider replacing sampling with uniform random
-    # space = ParameterSpace([CFGParameter("grammar", grammar, max_length=max_formula_length, min_length=0)])
     valid_formula = None
     invalid_formulas = []
-    # random_design = RandomDesign(space)
+    formula_size = random.randint(1, max_formula_length)
     while not valid_formula:
-        # candidate_formula = random_design.get_samples(1)
-        candidate_formula = grammar.sampler_restricted(1, max_formula_length, 0.5)
+        candidate_formula = grammar.sampler_restricted(1, formula_size, 0.5, formula_size)
         candidate_formula = unparse(candidate_formula)
         if candidate_formula not in invalid_formulas:
             formula = reformat(candidate_formula[0])
-            if not satisfying:
-                formula = "! ( " + formula + " )"
             validity = automaton.checkLTL(smv_file, formula)
-            if validity:
+            if (validity and satisfying) or (not validity and not satisfying):
                 valid_formula = candidate_formula[0]
             else:
                 invalid_formulas.append(candidate_formula)
@@ -92,6 +92,8 @@ def generate_mfl_entry(props, grammar, auto_size, auto_connect, max_symbols, for
     else:
         label = "0"
         formula = generate_formula(auto, grammar, formula_length, False, smv_file=model_file)
+    # delete model file (model has been checked, and content is in the model string
+    os.remove(model_file)
     return [model, formula, label]
 
 
@@ -127,7 +129,7 @@ if __name__ == "__main__":
     #     entry = generate_mfl_entry(propositions, gram, 20, 0.3, 4, 20, "temp.smv")
     #     entries.append(entry)
     num_cores = multiprocessing.cpu_count()
-
+    # here I use a new model file for each job to avoid race conditions. There's probably a better way of doing this.
     with parallel_backend('dask', wait_for_workers_timeout=120):
         entries = Parallel()(delayed(generate_mfl_entry)(propositions, gram, 20, 0.3, 11, 20, "model_files/temp"+str(i)+".smv") for i in trange(data_size))
 
@@ -135,10 +137,19 @@ if __name__ == "__main__":
         datawriter = csv.writer(csvfile)
         datawriter.writerows(entries)
 
-    # auto = generate_automaton(20, 0.3, symbols=propositions, max_symbols=4)
-    # traces = generate_trace(auto.graph, 10)
-    # sat_formula = generate_formula(auto, gram, 20)
-    # unsat_formula = generate_formula(auto, gram, 20, False)
-    # print(traces)
-    # print(sat_formula)
-    # print(unsat_formula)
+    count_dict = {}
+    count_dict = defaultdict(lambda: 0, count_dict)
+    with open(data_file, 'r', newline='') as csvfile:
+        datareader = csv.reader(csvfile)
+        for row in datareader:
+            phi = row[1].replace(" ", "")
+            phi_len = len(phi)
+            if count_dict[phi_len]:
+                count_dict[phi_len] += 1
+            else:
+                count_dict[phi_len] = 1
+
+    plt.bar(count_dict.keys(), count_dict.values())
+    plt.ylabel("Number of formulas")
+    plt.xlabel("Formula length")
+    plt.savefig(f"data/formula_distribution")
