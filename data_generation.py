@@ -67,7 +67,7 @@ def generate_formula(automaton, grammar, max_formula_length, satisfying=True, sm
     valid_formula = None
     invalid_formulas = []
     formula_size = random.randint(1, max_formula_length)
-    cfactor = max(math.exp(-100/formula_size), 10**-3)
+    cfactor = max(math.exp(-100/formula_size), 10**-2)
     while not valid_formula:
         candidate_formula = grammar.sampler_restricted(1, formula_size, cfactor, max_formula_length)
         candidate_formula = unparse(candidate_formula)
