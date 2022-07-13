@@ -87,7 +87,7 @@ def generate_formula(automaton, grammar, max_formula_length, satisfying=True, sm
                 else:
                     invalid_formulas.append(candidate_formula)
     else:
-        seed = int.from_bytes(os.urandom(4), byteorder="big")
+        seed = int.from_bytes(os.urandom(2), byteorder="big")
         # TODO: do tree_size like random formula size?
         ltl_properties = 'false=0,true=0,equiv=0,R=0,W=0,M=0'
         formula_generator = spot.randltl(grammar, seed=seed, tree_size=(1, max_formula_length), ltl_properties=ltl_properties)
