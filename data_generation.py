@@ -69,7 +69,7 @@ def generate_formula(automaton, grammar, max_formula_length, satisfying=True, sm
     formula_size = random.randint(1, max_formula_length)
     cfactor = math.exp(-100/formula_size)
     while not valid_formula:
-        candidate_formula = grammar.sampler_restricted(1, formula_size, 0.05, max_formula_length)
+        candidate_formula = grammar.sampler_restricted(1, formula_size, cfactor, max_formula_length)
         candidate_formula = unparse(candidate_formula)
         if candidate_formula not in invalid_formulas:
             formula = reformat(candidate_formula[0])
