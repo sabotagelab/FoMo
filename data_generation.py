@@ -37,6 +37,12 @@ from random_weighted_automaton import generateGraph, generateHistory
 from bayes_opt import reformat
 from model_check import Automaton
 
+spot_imported = True
+try:
+    import spot
+except ImportError:
+    spot_imported = False
+
 grammar_str = """
     S -> NOT LB S RB | LB S RB | GLB S | NXT S | FTR S | S AND S | S OR S | S IMPLIES S | S UNTIL S | T
     NOT -> "!"
@@ -63,22 +69,34 @@ def generate_trace(graph, trace_len):
 
 
 def generate_formula(automaton, grammar, max_formula_length, satisfying=True, smv_file="temp.smv"):
+    # grammar should be a Grammar object if spot_imported is False, and a string of propositions otherwise.
     # TODO: consider replacing sampling with uniform random
     valid_formula = None
     invalid_formulas = []
-    formula_size = random.randint(1, max_formula_length)
-    cfactor = max(math.exp(-100/formula_size), 10**-2)
-    while not valid_formula:
-        candidate_formula = grammar.sampler_restricted(1, formula_size, cfactor, max_formula_length)
-        candidate_formula = unparse(candidate_formula)
-        if candidate_formula not in invalid_formulas:
-            formula = reformat(candidate_formula[0])
-            validity = automaton.checkLTL(smv_file, formula)
+    if not spot_imported:
+        formula_size = random.randint(1, max_formula_length)
+        cfactor = max(math.exp(-100/formula_size), 10**-1)
+        while not valid_formula:
+            candidate_formula = grammar.sampler_restricted(1, formula_size, cfactor, max_formula_length)
+            candidate_formula = unparse(candidate_formula)
+            if candidate_formula not in invalid_formulas:
+                formula = reformat(candidate_formula[0])
+                validity = automaton.checkLTL(smv_file, formula)
+                if (validity and satisfying) or (not validity and not satisfying):
+                    valid_formula = reformat(candidate_formula[0])
+                else:
+                    invalid_formulas.append(candidate_formula)
+    else:
+        seed = int.from_bytes(os.urandom(4), byteorder="big")
+        # TODO: do tree_size like random formula size?
+        ltl_properties = 'false=0,true=0,equiv=0,R=0,W=0,M=0'
+        formula_generator = spot.randltl(grammar, seed=seed, tree_size=(1, max_formula_length), ltl_properties=ltl_properties)
+        while not valid_formula:
+            candidate_formula = next(formula_generator)
+            validity = automaton.checkLTL(smv_file, candidate_formula)
             if (validity and satisfying) or (not validity and not satisfying):
-                valid_formula = candidate_formula[0]
-            else:
-                invalid_formulas.append(candidate_formula)
-    return reformat(valid_formula)
+                valid_formula = candidate_formula
+    return valid_formula
 
 
 def generate_mfl_entry(props, grammar, auto_size, auto_connect, max_symbols, formula_length, model_file):
@@ -107,7 +125,10 @@ if __name__ == "__main__":
 
     prop_str = " | ".join(['"' + proposition + '"' for proposition in model_propositions])
     grammar_str = grammar_str + prop_str
-    gram = Grammar.fromstring(grammar_str)
+    if spot_imported:
+        gram = propositions
+    else:
+        gram = Grammar.fromstring(grammar_str)
     # test_auto = generate_automaton(20, 0.3, symbols=propositions, max_symbols=4)
     # test_formula = generate_formula(test_auto, gram, 20)
 
