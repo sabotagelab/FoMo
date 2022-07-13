@@ -92,7 +92,7 @@ def generate_formula(automaton, grammar, max_formula_length, satisfying=True, sm
         ltl_properties = 'false=0,true=0,equiv=0,R=0,W=0,M=0'
         formula_generator = spot.randltl(grammar, seed=seed, tree_size=(1, max_formula_length), ltl_properties=ltl_properties)
         while not valid_formula:
-            candidate_formula = next(formula_generator)
+            candidate_formula = str(next(formula_generator))
             validity = automaton.checkLTL(smv_file, candidate_formula)
             if (validity and satisfying) or (not validity and not satisfying):
                 valid_formula = candidate_formula
