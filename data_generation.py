@@ -90,7 +90,7 @@ def generate_formula(automaton, grammar, max_formula_length, satisfying=True, sm
         seed = int.from_bytes(os.urandom(2), byteorder="big")
         # TODO: do tree_size like random formula size?
         ltl_properties = 'false=0,true=0,equiv=0,R=0,W=0,M=0'
-        formula_generator = spot.randltl(grammar, seed=seed, tree_size=(formula_size, max_formula_length), ltl_properties=ltl_properties)
+        formula_generator = spot.randltl(grammar, seed=seed, tree_size=(formula_size, max_formula_length), simplify=0, ltl_properties=ltl_properties)
         while not valid_formula:
             candidate_formula = str(next(formula_generator))
             validity = automaton.checkLTL(smv_file, candidate_formula)
