@@ -90,19 +90,26 @@ def generate_formula(automaton, grammar, max_formula_length, satisfying=True, sm
         seed = int.from_bytes(os.urandom(2), byteorder="big")
         # TODO: allow wider range of formula size, but reject if it's size 1 or 2 and formula_size isn't?
         ltl_properties = 'false=0,true=0,equiv=0,R=0,W=0,M=0'
-        formula_generator = spot.randltl(grammar, seed=seed, tree_size=max_formula_length, simplify=0, ltl_properties=ltl_properties)
+        formula_generator = spot.randltl(grammar, seed=seed, tree_size=(formula_size, max_formula_length), simplify=0,
+                                         ltl_properties=ltl_properties)
         while not valid_formula:
             try:
                 candidate_formula = str(next(formula_generator))
             except StopIteration:
                 seed = int.from_bytes(os.urandom(2), byteorder="big")
-                formula_generator = spot.randltl(grammar, seed=seed, tree_size=max_formula_length, simplify=0,
-                                                 ltl_properties=ltl_properties)
+                formula_generator = spot.randltl(grammar, seed=seed, tree_size=(formula_size, max_formula_length),
+                                                 simplify=0, ltl_properties=ltl_properties)
                 candidate_formula = str(next(formula_generator))
 
-            validity = automaton.checkLTL(smv_file, candidate_formula)
-            if (validity and satisfying) or (not validity and not satisfying):
-                valid_formula = candidate_formula
+            formula_is_short = len(candidate_formula) <= 3
+            formula_shouldnt_be_short = formula_size > 3
+            if formula_is_short and formula_shouldnt_be_short:
+                # try again
+                continue
+            else:
+                validity = automaton.checkLTL(smv_file, candidate_formula)
+                if (validity and satisfying) or (not validity and not satisfying):
+                    valid_formula = candidate_formula
     return valid_formula
 
 
