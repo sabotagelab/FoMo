@@ -101,9 +101,11 @@ def generate_formula(automaton, grammar, max_formula_length, satisfying=True, sm
                                                  simplify=0, ltl_properties=ltl_properties)
                 candidate_formula = str(next(formula_generator))
 
-            formula_is_short = len(candidate_formula) <= 3
-            formula_shouldnt_be_short = formula_size != len(candidate_formula)
-            if formula_is_short and formula_shouldnt_be_short:
+            # formula_is_short = len(candidate_formula) <= 3
+            # formula_shouldnt_be_short = formula_size > 3
+            formula_is_wrong_length = len(candidate_formula) != formula_size
+            # if formula_is_short and formula_shouldnt_be_short:
+            if formula_is_wrong_length:
                 # try again
                 continue
             else:
