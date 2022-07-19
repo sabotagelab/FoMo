@@ -88,7 +88,6 @@ def generate_formula(automaton, grammar, max_formula_length, satisfying=True, sm
                     invalid_formulas.append(candidate_formula)
     else:
         seed = int.from_bytes(os.urandom(2), byteorder="big")
-        # TODO: allow wider range of formula size, but reject if it's size 1 or 2 and formula_size isn't?
         ltl_properties = 'false=0,true=0,equiv=0,R=0,W=0,M=0'
         formula_generator = spot.randltl(grammar, seed=seed, tree_size=(formula_size, max_formula_length), simplify=0,
                                          ltl_properties=ltl_properties)
@@ -102,10 +101,12 @@ def generate_formula(automaton, grammar, max_formula_length, satisfying=True, sm
                 candidate_formula = str(next(formula_generator))
 
             # formula_is_short = len(candidate_formula) <= 3
+            formula_is_short = len(candidate_formula.replace(" ", "")) <= formula_size
             # formula_shouldnt_be_short = formula_size > 3
-            formula_is_wrong_length = len(candidate_formula) != formula_size
+            # formula_is_wrong_length = len(candidate_formula) != formula_size
             # if formula_is_short and formula_shouldnt_be_short:
-            if formula_is_wrong_length:
+            # if formula_is_wrong_length:
+            if formula_is_short:
                 # try again
                 continue
             else:
