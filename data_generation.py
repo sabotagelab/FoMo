@@ -175,6 +175,8 @@ if __name__ == "__main__":
 
     with open(data_file, 'w', newline='') as csvfile:
         datawriter = csv.writer(csvfile)
+        headwriter = csv.DictWriter(csvfile, fieldnames=["sys", "phi", "label"])
+        headwriter.writeheader()
         datawriter.writerows(entries)
 
     count_dict = {}
