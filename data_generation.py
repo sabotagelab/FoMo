@@ -106,10 +106,23 @@ def generate_formula(automaton, grammar, max_formula_length, satisfying=True, sm
             # formula_is_wrong_length = len(candidate_formula) != formula_size
             # if formula_is_short and formula_shouldnt_be_short:
             # if formula_is_wrong_length:
-            if formula_is_short:
+            # check desired properties, sometimes equiv, R, W, and M show up
+            equiv = "<->" in candidate_formula
+            release = "R" in candidate_formula
+            weak_release = "M" in candidate_formula
+            weak_until = "W" in candidate_formula
+            prop_violation = equiv or release or weak_release or weak_until
+            if formula_is_short or prop_violation:
                 # try again
                 continue
             else:
+                # add space after temporal operators
+                candidate_formula_as_list = list(candidate_formula)
+                for i, char in enumerate(candidate_formula_as_list):
+                    if char.isupper():
+                        if candidate_formula_as_list[i+1].isalpha():
+                            candidate_formula_as_list.insert(i+1, ' ')
+                candidate_formula = "".join(candidate_formula_as_list)
                 validity = automaton.checkLTL(smv_file, candidate_formula)
                 if (validity and satisfying) or (not validity and not satisfying):
                     valid_formula = candidate_formula
@@ -153,17 +166,17 @@ if __name__ == "__main__":
         queue='eecs',
         project='eecs',
         cores=10,
-        memory='24GB',
+        memory='48GB',
         shebang="#!/bin/bash",
-        n_workers=20,
-        walltime='24:00:00',
+        n_workers=40,
+        walltime='3-00:00:00',
         job_extra=['-o generate_data.out', '-e generate_data.err', '--mail-user=sheablyc@oregonstate.edu', '--mail-type=ALL'],
     )
     print(cluster.dashboard_link)
     client = Client(cluster.scheduler_address)
 
-    data_size = 2**16
-    data_file = "data/deep_verify_data.csv"
+    data_size = 2**20
+    data_file = "data/deep_verify_train_data.csv"
     # entries = []
     # for _ in trange(data_size):
     #     entry = generate_mfl_entry(propositions, gram, 20, 0.3, 4, 20, "temp.smv")
