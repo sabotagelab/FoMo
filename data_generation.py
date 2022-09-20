@@ -112,7 +112,7 @@ def generate_formula(automaton, grammar, max_formula_length, satisfying=True, sm
             weak_release = "M" in candidate_formula
             weak_until = "W" in candidate_formula
             true_false = "1" in candidate_formula or "0" in candidate_formula
-            prop_violation = equiv or release or weak_release or weak_until
+            prop_violation = equiv or release or weak_release or weak_until or true_false
             if formula_is_short or prop_violation:
                 # try again
                 continue
