@@ -6,6 +6,7 @@ src/*
 deepverify/*
 dask-worker-space/*
 data/*.csv
+data/*.txt
 .idea/workspace.xml
 .idea/vcs.xml
 .idea/other.xml
