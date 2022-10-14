@@ -177,8 +177,8 @@ if __name__ == "__main__":
     print(cluster.dashboard_link)
     client = Client(cluster.scheduler_address)
 
-    data_size = 2**16
-    data_file = "data/deep_verify_train_data_small.csv"
+    data_size = 2**10
+    data_file = "data/deep_verify_eval_data_small.csv"
     # entries = []
     # for _ in trange(data_size):
     #     entry = generate_mfl_entry(propositions, gram, 20, 0.3, 4, 20, "temp.smv")
