@@ -149,7 +149,8 @@ def generate_mfl_entry(props, grammar, auto_size, auto_connect, max_symbols, for
 
 
 if __name__ == "__main__":
-    propositions = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'p', 'q', 'r', 's']
+    # propositions = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'p', 'q', 'r', 's']
+    propositions = ['a', 'b']
     model_propositions = []
     for prop in propositions:
         model_propositions.append(str(prop))
@@ -176,8 +177,8 @@ if __name__ == "__main__":
     print(cluster.dashboard_link)
     client = Client(cluster.scheduler_address)
 
-    data_size = 2**20
-    data_file = "data/deep_verify_train_data.csv"
+    data_size = 2**16
+    data_file = "data/deep_verify_train_data_small.csv"
     # entries = []
     # for _ in trange(data_size):
     #     entry = generate_mfl_entry(propositions, gram, 20, 0.3, 4, 20, "temp.smv")
@@ -185,7 +186,7 @@ if __name__ == "__main__":
     num_cores = multiprocessing.cpu_count()
     # here I use a new model file for each job to avoid race conditions. There's probably a better way of doing this.
     with parallel_backend('dask', wait_for_workers_timeout=120):
-        entries = Parallel()(delayed(generate_mfl_entry)(propositions, gram, 20, 0.3, 11, 20, "model_files/temp"+str(i)+".smv") for i in trange(data_size))
+        entries = Parallel()(delayed(generate_mfl_entry)(propositions, gram, 5, 0.8, 2, 4, "model_files/temp"+str(i)+".smv") for i in trange(data_size))
 
     with open(data_file, 'w', newline='') as csvfile:
         datawriter = csv.writer(csvfile)
@@ -208,4 +209,4 @@ if __name__ == "__main__":
     plt.bar(count_dict.keys(), count_dict.values())
     plt.ylabel("Number of formulas")
     plt.xlabel("Formula length")
-    plt.savefig(f"data/formula_distribution")
+    # plt.savefig(f"data/formula_distribution")

@@ -58,7 +58,7 @@ def plot_count(count_dict, ylabel, xlabel, save_path):
 def plot_counts(count_dicts, ylabel, xlabel, save_path):
     plt.figure()
     for count_dict in count_dicts:
-        plt.bar(count_dict.keys(), count_dict.values())
+        plt.bar(count_dict.keys(), count_dict.values(), alpha=0.5)
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
     plt.savefig(save_path)
