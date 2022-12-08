@@ -50,6 +50,27 @@ class Automaton(object):
         self.prob = "prob" in self.graph.es.attribute_names()
 
     @classmethod
+    def from_matrix(cls, adj_matrix, atomic_propositions, label_asg, weight_asg=None, initial_state=0):
+        """
+        Create an automaton from an adjacency matrix and the labels assigned to each state
+
+        :param adj_matrix:
+        :param atomic_propositions: a list of strings, e.g. ['a', 'b', 'p', 'q']
+        :param label_asg: a list of label assignments in order of vertices, e.g. ["a, b", "b, q", "p, q"]
+        :param weight_asg: a list of weight assignments in order of edges, e.g. [1, 0.3, -2.5, 6, 8, 10]
+        :param initial_state: a vertex number to be the starting state of the automaton
+        :return:
+        """
+        graph = Graph.Adjacency(adj_matrix)
+        if not weight_asg:
+            weight_asg = np.ones(graph.ecount())
+        graph.es["weight"] = weight_asg
+        graph.es["label"] = weight_asg
+
+        graph.vs["label"] = label_asg
+        return cls(graph, initial_state, atomic_propositions)
+
+    @classmethod
     def with_actions(cls, graph, actions, q0=0, probs=None):
         """
         graph is a directed igraph graph object
@@ -802,6 +823,23 @@ class Automaton(object):
             # Specification
             f.write(x)
             f.write("\n")
+
+    def convertToMatrix(self, labeled_mat=False):
+        """
+        Get a matrix representation of the automaton augmented with the labels on each state; e.g. for a two state
+        automaton with two transitions: one from the first state to the second state, and one from the second state to
+        itself. The first state is labeled "a, b" and the second state is labeled "a, c".
+        if labeled_mat is True, then the output is like [['0', 'a, c'], ['0', 'a, c']].
+        otherwise: [("a, b", [0, 1]), ("a, c", [0, 1])]
+        :return:
+        """
+        mat = np.array(self.graph.get_adjacency().data)
+        labels = self.graph.vs["label"]
+        if labeled_mat:
+            return np.where(np.array(mat) > 0, labels, 0)
+        mat = np.where(mat > 0, 1, 0).tolist()
+        # TODO: add a method to minimize output (e.g., remove quotes, brackets, parens)
+        return list(zip(labels, mat))
 
 
 class Obligation(object):

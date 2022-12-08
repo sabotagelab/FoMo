@@ -58,9 +58,22 @@ grammar_str = """
     T -> """
 
 
-def generate_automaton(num_vertices, prob_edges, symbols=None, max_symbols=1):
+def generate_automaton(num_vertices, prob_edges, symbols=None, max_symbols=1, formula=None, satisfy=True):
     # get a random graph that's automaton shaped
     graph = generateGraph(num_vertices, prob_edges, 0, 1, symbols, max_symbols)
+    if formula:
+        # reject the automaton if it doesn't satisfy the formula
+        auto = Automaton(graph, 0, symbols)
+        valid_auto = None
+        while not valid_auto:
+            validity = auto.checkLTL("temp.smv", formula)
+            if (validity and satisfy) or (not validity and not satisfy):
+                valid_auto = auto
+            else:
+                graph = generateGraph(num_vertices, prob_edges, 0, 1, symbols, max_symbols)
+                auto = Automaton(graph, 0, symbols)
+        return valid_auto
+
     return Automaton(graph, 0, symbols)
 
 
@@ -100,40 +113,71 @@ def generate_formula(automaton, grammar, max_formula_length, satisfying=True, sm
                                                  simplify=0, ltl_properties=ltl_properties)
                 candidate_formula = str(next(formula_generator))
 
-            # formula_is_short = len(candidate_formula) <= 3
-            formula_is_short = len(candidate_formula.replace(" ", "")) <= formula_size
-            # formula_shouldnt_be_short = formula_size > 3
-            # formula_is_wrong_length = len(candidate_formula) != formula_size
-            # if formula_is_short and formula_shouldnt_be_short:
-            # if formula_is_wrong_length:
-            # check desired properties, sometimes equiv, R, W, and M show up
-            equiv = "<->" in candidate_formula
-            release = "R" in candidate_formula
-            weak_release = "M" in candidate_formula
-            weak_until = "W" in candidate_formula
-            true_false = "1" in candidate_formula or "0" in candidate_formula
-            prop_violation = equiv or release or weak_release or weak_until or true_false
-            if formula_is_short or prop_violation:
+            bad_formula = not check_formula(candidate_formula, formula_size)
+            if bad_formula:
                 # try again
                 continue
             else:
-                # add space after temporal operators
-                candidate_formula_as_list = list(candidate_formula)
-                for i, char in enumerate(candidate_formula_as_list):
-                    if char.isupper():
-                        if candidate_formula_as_list[i+1].isalpha():
-                            candidate_formula_as_list.insert(i+1, ' ')
-                candidate_formula = "".join(candidate_formula_as_list)
+                candidate_formula = expand_spot_formula(candidate_formula)
                 validity = automaton.checkLTL(smv_file, candidate_formula)
                 if (validity and satisfying) or (not validity and not satisfying):
                     valid_formula = candidate_formula
     return valid_formula
 
 
+# TODO: use rewriting rules of LTL to generate equivalent formulas instead of using random generation.
+def generate_equiv_formulas(formula, number, grammar, formula_size, max_formula_length):
+    seed = int.from_bytes(os.urandom(2), byteorder="big")
+    ltl_properties = 'false=0,true=0,equiv=0,R=0,W=0,M=0'
+    formula_generator = spot.randltl(grammar, seed=seed, tree_size=(formula_size, max_formula_length), simplify=0,
+                                     ltl_properties=ltl_properties)
+    checker = spot.language_containment_checker()
+    equiv_formulas = []
+    while len(equiv_formulas) < number:
+        try:
+            candidate_formula = str(next(formula_generator))
+        except StopIteration:
+            seed = int.from_bytes(os.urandom(2), byteorder="big")
+            formula_generator = spot.randltl(grammar, seed=seed, tree_size=(formula_size, max_formula_length),
+                                             simplify=0, ltl_properties=ltl_properties)
+            candidate_formula = str(next(formula_generator))
+        bad_formula = not check_formula(candidate_formula, formula_size)
+        if bad_formula:
+            # try again
+            continue
+        elif checker.equal(formula, candidate_formula):
+            equiv_formulas.append(candidate_formula)
+    return equiv_formulas
+
+
+def expand_spot_formula(candidate_formula):
+    # add space after temporal operators
+    candidate_formula_as_list = list(candidate_formula)
+    for i, char in enumerate(candidate_formula_as_list):
+        if char.isupper():
+            if candidate_formula_as_list[i + 1].isalpha():
+                candidate_formula_as_list.insert(i + 1, ' ')
+    candidate_formula = "".join(candidate_formula_as_list)
+    return candidate_formula
+
+
+def check_formula(candidate_formula, formula_size):
+    formula_is_short = len(candidate_formula.replace(" ", "")) <= formula_size
+    equiv = "<->" in candidate_formula
+    release = "R" in candidate_formula
+    weak_release = "M" in candidate_formula
+    weak_until = "W" in candidate_formula
+    true_false = "1" in candidate_formula or "0" in candidate_formula
+    prop_violation = equiv or release or weak_release or weak_until or true_false
+    bad_formula = formula_is_short or prop_violation
+    return not bad_formula
+
+
 def generate_mfl_entry(props, grammar, auto_size, auto_connect, max_symbols, formula_length, model_file):
     coin = [True, False]
     auto = generate_automaton(auto_size, auto_connect, symbols=props, max_symbols=max_symbols)
-    model = auto.convertToNuXmv(model_file, x=None, lang="LTL", return_string=True)
+    # model = auto.convertToNuXmv(model_file, x=None, lang="LTL", return_string=True)
+    model = auto.convertToMatrix()
     formula = ""
     label = ""
     flip = random.choice(coin)
@@ -146,6 +190,21 @@ def generate_mfl_entry(props, grammar, auto_size, auto_connect, max_symbols, for
     # delete model file (model has been checked, and content is in the model string
     os.remove(model_file)
     return [model, formula, label]
+
+
+def generate_contrastive_mfl_entry(props, grammar, auto_size, auto_connect, max_symbols, formula_length, model_file,
+                                   negative_examples):
+    auto = generate_automaton(auto_size, auto_connect, symbols=props, max_symbols=max_symbols)
+    pos_model = auto.convertToMatrix()
+    formula = generate_formula(auto, grammar, formula_length, False, smv_file=model_file)
+    # TODO: generate |negative_examples| unsatisfying model files
+    negative_models = []
+    while len(negative_models) < negative_examples:
+        negative_models.append(
+            generate_automaton(auto_size, auto_connect, symbols=props, max_symbols=max_symbols,
+                               formula=formula, satisfy=False).convertToMatrix())
+
+    return [pos_model, formula] + negative_models
 
 
 if __name__ == "__main__":
@@ -178,7 +237,7 @@ if __name__ == "__main__":
     client = Client(cluster.scheduler_address)
 
     data_size = 2**10
-    data_file = "data/deep_verify_eval_data_small.csv"
+    data_file = "data/deep_verify_train_data_contrastive_small.csv"
     # entries = []
     # for _ in trange(data_size):
     #     entry = generate_mfl_entry(propositions, gram, 20, 0.3, 4, 20, "temp.smv")
@@ -186,27 +245,28 @@ if __name__ == "__main__":
     num_cores = multiprocessing.cpu_count()
     # here I use a new model file for each job to avoid race conditions. There's probably a better way of doing this.
     with parallel_backend('dask', wait_for_workers_timeout=120):
-        entries = Parallel()(delayed(generate_mfl_entry)(propositions, gram, 5, 0.8, 2, 4, "model_files/temp"+str(i)+".smv") for i in trange(data_size))
+        # entries = Parallel()(delayed(generate_mfl_entry)(propositions, gram, 5, 0.8, 2, 4, "model_files/temp"+str(i)+".smv") for i in trange(data_size))
+        entries = Parallel()(delayed(generate_contrastive_mfl_entry)(propositions, gram, 5, 0.8, 2, 4, "model_files/temp"+str(i)+".smv", 5) for i in trange(data_size))
 
     with open(data_file, 'w', newline='') as csvfile:
         datawriter = csv.writer(csvfile)
-        headwriter = csv.DictWriter(csvfile, fieldnames=["sys", "phi", "label"])
+        headwriter = csv.DictWriter(csvfile, fieldnames=["sys", "phi", "label"] + ["nex" + str(k) for k in range(5)])
         headwriter.writeheader()
         datawriter.writerows(entries)
 
-    count_dict = {}
-    count_dict = defaultdict(lambda: 0, count_dict)
-    with open(data_file, 'r', newline='') as csvfile:
-        datareader = csv.reader(csvfile)
-        for row in datareader:
-            phi = row[1].replace(" ", "")
-            phi_len = len(phi)
-            if count_dict[phi_len]:
-                count_dict[phi_len] += 1
-            else:
-                count_dict[phi_len] = 1
-
-    plt.bar(count_dict.keys(), count_dict.values())
-    plt.ylabel("Number of formulas")
-    plt.xlabel("Formula length")
+    # count_dict = {}
+    # count_dict = defaultdict(lambda: 0, count_dict)
+    # with open(data_file, 'r', newline='') as csvfile:
+    #     datareader = csv.reader(csvfile)
+    #     for row in datareader:
+    #         phi = row[1].replace(" ", "")
+    #         phi_len = len(phi)
+    #         if count_dict[phi_len]:
+    #             count_dict[phi_len] += 1
+    #         else:
+    #             count_dict[phi_len] = 1
+    #
+    # plt.bar(count_dict.keys(), count_dict.values())
+    # plt.ylabel("Number of formulas")
+    # plt.xlabel("Formula length")
     # plt.savefig(f"data/formula_distribution")
