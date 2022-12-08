@@ -229,7 +229,7 @@ if __name__ == "__main__":
         cores=10,
         memory='48GB',
         shebang="#!/bin/bash",
-        n_workers=40,
+        n_workers=10,
         walltime='3-00:00:00',
         job_extra=['-o generate_data.out', '-e generate_data.err', '--mail-user=sheablyc@oregonstate.edu', '--mail-type=ALL'],
     )
