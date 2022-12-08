@@ -196,7 +196,7 @@ def generate_contrastive_mfl_entry(props, grammar, auto_size, auto_connect, max_
                                    negative_examples):
     auto = generate_automaton(auto_size, auto_connect, symbols=props, max_symbols=max_symbols)
     pos_model = auto.convertToMatrix()
-    formula = generate_formula(auto, grammar, formula_length, False, smv_file=model_file)
+    formula = generate_formula(auto, grammar, formula_length, True, smv_file=model_file)
     # TODO: generate |negative_examples| unsatisfying model files
     negative_models = []
     while len(negative_models) < negative_examples:
@@ -250,7 +250,7 @@ if __name__ == "__main__":
 
     with open(data_file, 'w', newline='') as csvfile:
         datawriter = csv.writer(csvfile)
-        headwriter = csv.DictWriter(csvfile, fieldnames=["sys", "phi", "label"] + ["nex" + str(k) for k in range(5)])
+        headwriter = csv.DictWriter(csvfile, fieldnames=["sys", "phi"] + ["nex" + str(k) for k in range(5)])
         headwriter.writeheader()
         datawriter.writerows(entries)
 
