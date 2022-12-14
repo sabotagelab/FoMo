@@ -58,7 +58,8 @@ grammar_str = """
     T -> """
 
 
-def generate_automaton(num_vertices, prob_edges, symbols=None, max_symbols=1, formula=None, satisfy=True):
+def generate_automaton(num_vertices, prob_edges, symbols=None, max_symbols=1,
+                       smv_file="temp.smv", formula=None, satisfy=True):
     # get a random graph that's automaton shaped
     graph = generateGraph(num_vertices, prob_edges, 0, 1, symbols, max_symbols)
     if formula:
@@ -66,7 +67,7 @@ def generate_automaton(num_vertices, prob_edges, symbols=None, max_symbols=1, fo
         auto = Automaton(graph, 0, symbols)
         valid_auto = None
         while not valid_auto:
-            validity = auto.checkLTL("temp.smv", formula)
+            validity = auto.checkLTL(smv_file, formula)
             if (validity and satisfy) or (not validity and not satisfy):
                 valid_auto = auto
             else:
@@ -202,7 +203,7 @@ def generate_contrastive_mfl_entry(props, grammar, auto_size, auto_connect, max_
     while len(negative_models) < negative_examples:
         negative_models.append(
             generate_automaton(auto_size, auto_connect, symbols=props, max_symbols=max_symbols,
-                               formula=formula, satisfy=False).convertToMatrix())
+                               smv_file=model_file, formula=formula, satisfy=False).convertToMatrix())
 
     return [pos_model, formula] + negative_models
 

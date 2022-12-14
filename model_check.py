@@ -63,7 +63,7 @@ class Automaton(object):
         """
         graph = Graph.Adjacency(adj_matrix)
         if not weight_asg:
-            weight_asg = np.ones(graph.ecount())
+            weight_asg = np.zeros(graph.ecount())
         graph.es["weight"] = weight_asg
         graph.es["label"] = weight_asg
 
@@ -74,7 +74,7 @@ class Automaton(object):
     def with_actions(cls, graph, actions, q0=0, probs=None):
         """
         graph is a directed igraph graph object
-        actions is a dictionary that maps edges to actions
+        actions is a dictionary that maps actions to edges
         key(action), values(list of edges)
         e.g. {0:[0, 1, 3], 1:[2, 4], 2:[5], ... }
         probs is a list of probabilities such that probs[k] is the
@@ -548,6 +548,9 @@ class Automaton(object):
         # nuxmv = "/home/colin/Downloads/nuXmv-2.0.0-Linux/bin/nuXmv"
         nuxmv = "nuXmv"
         out = subprocess.run([nuxmv, file], stdout=subprocess.PIPE)
+        # TODO: a more robust "api"
+        #  - this shouldn't fail because nuXmv only prints "true" (lower case) when the spec is satisfied, or if a state
+        #  name or label is called "true", but the way convertToNuXmv is written, no state, label, or name can be "true"
         check = "true" in str(out.stdout)
         if verbose:
             print(out.stdout)
