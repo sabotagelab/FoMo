@@ -17,6 +17,7 @@ import csv
 import random
 import os
 import math
+import re
 
 from collections import defaultdict
 
@@ -89,7 +90,7 @@ def generate_formula(automaton, grammar, max_formula_length, satisfying=True, sm
     invalid_formulas = []
     formula_size = random.randint(1, max_formula_length)
     if not spot_imported:
-        cfactor = max(math.exp(-100/formula_size), 10**-1)
+        cfactor = max(math.exp(-100 / formula_size), 10 ** -1)
         while not valid_formula:
             candidate_formula = grammar.sampler_restricted(1, formula_size, cfactor, max_formula_length)
             candidate_formula = unparse(candidate_formula)
@@ -196,16 +197,21 @@ def generate_mfl_entry(props, grammar, auto_size, auto_connect, max_symbols, for
 def generate_contrastive_mfl_entry(props, grammar, auto_size, auto_connect, max_symbols, formula_length, model_file,
                                    negative_examples):
     auto = generate_automaton(auto_size, auto_connect, symbols=props, max_symbols=max_symbols)
-    pos_model = auto.convertToMatrix()
+    pos_model = strip_auto_mat(auto.convertToMatrix())
     formula = generate_formula(auto, grammar, formula_length, True, smv_file=model_file)
     # TODO: generate |negative_examples| unsatisfying model files
     negative_models = []
     while len(negative_models) < negative_examples:
-        negative_models.append(
-            generate_automaton(auto_size, auto_connect, symbols=props, max_symbols=max_symbols,
-                               smv_file=model_file, formula=formula, satisfy=False).convertToMatrix())
+        auto_mat = generate_automaton(auto_size, auto_connect, symbols=props, max_symbols=max_symbols,
+                                      smv_file=model_file, formula=formula, satisfy=False).convertToMatrix()
+        negative_models.append(strip_auto_mat(auto_mat))
 
     return [pos_model, formula] + negative_models
+
+
+def strip_auto_mat(auto_mat):
+    auto_str = re.sub(r'\W', '', str(auto_mat))
+    return auto_str
 
 
 if __name__ == "__main__":
@@ -232,12 +238,13 @@ if __name__ == "__main__":
         shebang="#!/bin/bash",
         n_workers=10,
         walltime='3-00:00:00',
-        job_extra=['-o generate_data.out', '-e generate_data.err', '--mail-user=sheablyc@oregonstate.edu', '--mail-type=ALL'],
+        job_extra=['-o generate_data.out', '-e generate_data.err', '--mail-user=sheablyc@oregonstate.edu',
+                   '--mail-type=ALL'],
     )
     print(cluster.dashboard_link)
     client = Client(cluster.scheduler_address)
 
-    data_size = 2**10
+    data_size = 2 ** 10
     data_file = "data/deep_verify_train_data_contrastive_small.csv"
     # entries = []
     # for _ in trange(data_size):
@@ -247,7 +254,9 @@ if __name__ == "__main__":
     # here I use a new model file for each job to avoid race conditions. There's probably a better way of doing this.
     with parallel_backend('dask', wait_for_workers_timeout=120):
         # entries = Parallel()(delayed(generate_mfl_entry)(propositions, gram, 5, 0.8, 2, 4, "model_files/temp"+str(i)+".smv") for i in trange(data_size))
-        entries = Parallel()(delayed(generate_contrastive_mfl_entry)(propositions, gram, 5, 0.8, 2, 4, "model_files/temp"+str(i)+".smv", 5) for i in trange(data_size))
+        entries = Parallel()(delayed(generate_contrastive_mfl_entry)(propositions, gram, 5, 0.8, 2, 4,
+                                                                     "model_files/temp" + str(i) + ".smv", 5) for i in
+                             trange(data_size))
 
     with open(data_file, 'w', newline='') as csvfile:
         datawriter = csv.writer(csvfile)
