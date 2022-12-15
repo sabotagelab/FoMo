@@ -222,7 +222,7 @@ def strip_auto_mat(auto_mat):
 def _init_default_cluster(cores, workers):
     cluster = SLURMCluster(
         queue='eecs',
-        project='eecs',
+        project='eecs3',
         cores=cores,
         memory='48GB',
         shebang="#!/bin/bash",
