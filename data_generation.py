@@ -284,7 +284,7 @@ def _time_gen_phi_from_sys(sys_auto, propositions, phi_len):
     cluster = _init_default_cluster(1, 1)
     client = Client(cluster.scheduler_address)
     with parallel_backend('dask', wait_for_workers_timeout=120):
-        entries = Parallel()(delayed(generate_formula)(sys_auto, propositions, propositions, phi_len, True, "model_files/temp" + str(i) + ".smv") for i in trange(10000))
+        entries = Parallel()(delayed(generate_formula)(sys_auto, propositions, phi_len, True, "model_files/temp" + str(i) + ".smv") for i in trange(10000))
     with open("data/sat_formula_test", 'w', newline='') as csvfile:
         datawriter = csv.writer(csvfile)
         headwriter = csv.DictWriter(csvfile, fieldnames=["formula"])
