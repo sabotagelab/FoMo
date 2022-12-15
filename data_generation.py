@@ -222,14 +222,14 @@ def strip_auto_mat(auto_mat):
 def _init_default_cluster(cores, workers):
     cluster = SLURMCluster(
         queue='eecs',
-        project='eecs3',
+        project='share',
         cores=cores,
         memory='48GB',
         shebang="#!/bin/bash",
         n_workers=workers,
         walltime='3-00:00:00',
         job_extra=['-o generate_data.out', '-e generate_data.err', '--mail-user=sheablyc@oregonstate.edu',
-                   '--mail-type=ALL'],
+                   '--mail-type=ALL', '--nodelist=cn-a-7'],
     )
     return cluster
 
