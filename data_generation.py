@@ -79,6 +79,12 @@ def generate_automaton(num_vertices, prob_edges, symbols=None, max_symbols=1,
     return Automaton(graph, 0, symbols)
 
 
+def generate_auto_mat(num_vertices, prob_edges, symbols=None, max_symbols=1,
+                       smv_file="temp.smv", formula=None, satisfy=True):
+    auto = generate_automaton(num_vertices, prob_edges, symbols, max_symbols, smv_file, formula, satisfy)
+    return auto.convertToMatrix()
+
+
 def generate_trace(graph, trace_len):
     return generateHistory(graph, graph.es["weight"], trace_len, 0)[2]
 
@@ -179,7 +185,7 @@ def generate_mfl_entry(props, grammar, auto_size, auto_connect, max_symbols, for
     coin = [True, False]
     auto = generate_automaton(auto_size, auto_connect, symbols=props, max_symbols=max_symbols)
     # model = auto.convertToNuXmv(model_file, x=None, lang="LTL", return_string=True)
-    model = auto.convertToMatrix()
+    model = strip_auto_mat(auto.convertToMatrix())
     formula = ""
     label = ""
     flip = random.choice(coin)
@@ -199,7 +205,6 @@ def generate_contrastive_mfl_entry(props, grammar, auto_size, auto_connect, max_
     auto = generate_automaton(auto_size, auto_connect, symbols=props, max_symbols=max_symbols)
     pos_model = strip_auto_mat(auto.convertToMatrix())
     formula = generate_formula(auto, grammar, formula_length, True, smv_file=model_file)
-    # TODO: generate |negative_examples| unsatisfying model files
     negative_models = []
     while len(negative_models) < negative_examples:
         auto_mat = generate_automaton(auto_size, auto_connect, symbols=props, max_symbols=max_symbols,
@@ -214,69 +219,137 @@ def strip_auto_mat(auto_mat):
     return auto_str
 
 
-if __name__ == "__main__":
-    # propositions = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'p', 'q', 'r', 's']
-    propositions = ['a', 'b']
+def _init_default_cluster(cores, workers):
+    cluster = SLURMCluster(
+        queue='eecs',
+        project='eecs',
+        cores=cores,
+        memory='48GB',
+        shebang="#!/bin/bash",
+        n_workers=workers,
+        walltime='3-00:00:00',
+        job_extra=['-o generate_data.out', '-e generate_data.err', '--mail-user=sheablyc@oregonstate.edu',
+                   '--mail-type=ALL'],
+    )
+    return cluster
+
+
+def _hpc_data_gen(propositions, grammar, n_entries, n_contrast, states, e_prob, max_labels, phi_len, cores, workers,
+                  out_file):
     model_propositions = []
     for prop in propositions:
         model_propositions.append(str(prop))
 
     prop_str = " | ".join(['"' + proposition + '"' for proposition in model_propositions])
-    grammar_str = grammar_str + prop_str
+    grammar = grammar + prop_str
     if spot_imported:
         gram = propositions
     else:
-        gram = Grammar.fromstring(grammar_str)
+        gram = Grammar.fromstring(grammar)
     # test_auto = generate_automaton(20, 0.3, symbols=propositions, max_symbols=4)
     # test_formula = generate_formula(test_auto, gram, 20)
 
-    cluster = SLURMCluster(
-        queue='eecs',
-        project='eecs',
-        cores=10,
-        memory='48GB',
-        shebang="#!/bin/bash",
-        n_workers=10,
-        walltime='3-00:00:00',
-        job_extra=['-o generate_data.out', '-e generate_data.err', '--mail-user=sheablyc@oregonstate.edu',
-                   '--mail-type=ALL'],
-    )
+    cluster = _init_default_cluster(cores, workers)
     print(cluster.dashboard_link)
     client = Client(cluster.scheduler_address)
 
-    data_size = 2 ** 10
-    data_file = "data/deep_verify_train_data_contrastive_small.csv"
-    # entries = []
-    # for _ in trange(data_size):
-    #     entry = generate_mfl_entry(propositions, gram, 20, 0.3, 4, 20, "temp.smv")
-    #     entries.append(entry)
+    data_size = n_entries
     num_cores = multiprocessing.cpu_count()
     # here I use a new model file for each job to avoid race conditions. There's probably a better way of doing this.
     with parallel_backend('dask', wait_for_workers_timeout=120):
-        # entries = Parallel()(delayed(generate_mfl_entry)(propositions, gram, 5, 0.8, 2, 4, "model_files/temp"+str(i)+".smv") for i in trange(data_size))
-        entries = Parallel()(delayed(generate_contrastive_mfl_entry)(propositions, gram, 5, 0.8, 2, 4,
-                                                                     "model_files/temp" + str(i) + ".smv", 5) for i in
-                             trange(data_size))
+        if n_contrast:
+            entries = Parallel()(
+                delayed(generate_contrastive_mfl_entry)(propositions, gram, states, e_prob, max_labels, phi_len,
+                                                        "model_files/temp" + str(i) + ".smv", 5) for i
+                in
+                trange(data_size))
+        else:
+            entries = Parallel()(
+                delayed(generate_mfl_entry)(propositions, gram, states, e_prob, max_labels, phi_len,
+                                            "model_files/temp" + str(i) + ".smv") for
+                i in trange(data_size))
 
-    with open(data_file, 'w', newline='') as csvfile:
+    with open(out_file, 'w', newline='') as csvfile:
         datawriter = csv.writer(csvfile)
-        headwriter = csv.DictWriter(csvfile, fieldnames=["sys", "phi"] + ["nex" + str(k) for k in range(5)])
+        if n_contrast:
+            headwriter = csv.DictWriter(csvfile,
+                                        fieldnames=["sys", "phi"] + ["nex" + str(k) for k in range(n_contrast)])
+        else:
+            headwriter = csv.DictWriter(csvfile, fieldnames=["sys", "phi"])
         headwriter.writeheader()
         datawriter.writerows(entries)
 
-    # count_dict = {}
-    # count_dict = defaultdict(lambda: 0, count_dict)
-    # with open(data_file, 'r', newline='') as csvfile:
-    #     datareader = csv.reader(csvfile)
-    #     for row in datareader:
-    #         phi = row[1].replace(" ", "")
-    #         phi_len = len(phi)
-    #         if count_dict[phi_len]:
-    #             count_dict[phi_len] += 1
-    #         else:
-    #             count_dict[phi_len] = 1
-    #
-    # plt.bar(count_dict.keys(), count_dict.values())
-    # plt.ylabel("Number of formulas")
-    # plt.xlabel("Formula length")
-    # plt.savefig(f"data/formula_distribution")
+
+def _time_gen_phi_from_sys(sys_auto, propositions, phi_len):
+    cluster = _init_default_cluster(1, 1)
+    client = Client(cluster.scheduler_address)
+    with parallel_backend('dask', wait_for_workers_timeout=120):
+        entries = Parallel()(delayed(generate_formula)(sys_auto, propositions, propositions, phi_len, True, "model_files/temp" + str(i) + ".smv") for i in trange(10000))
+    with open("data/sat_formula_test", 'w', newline='') as csvfile:
+        datawriter = csv.writer(csvfile)
+        headwriter = csv.DictWriter(csvfile, fieldnames=["formula"])
+        headwriter.writeheader()
+        datawriter.writerows(entries)
+
+
+def _time_gen_trace_from_sys(sys_auto):
+    cluster = _init_default_cluster(1, 1)
+    client = Client(cluster.scheduler_address)
+    with parallel_backend('dask', wait_for_workers_timeout=120):
+        entries = Parallel()(delayed(generate_trace)(sys_auto.graph, 1000) for _ in trange(10000))
+    with open("data/trace_test", 'w', newline='') as csvfile:
+        datawriter = csv.writer(csvfile)
+        headwriter = csv.DictWriter(csvfile, fieldnames=["transitions", "value", "labels"])
+        headwriter.writeheader()
+        datawriter.writerows(entries)
+
+
+def _time_gen_sys_from_phi(phi_str, states, e_prob, propositions, max_symbols):
+    cluster = _init_default_cluster(1, 1)
+    client = Client(cluster.scheduler_address)
+    with parallel_backend('dask', wait_for_workers_timeout=120):
+        entries = Parallel()(delayed(generate_auto_mat)(states, e_prob, propositions, max_symbols, "model_files/temp" + str(i) + ".smv", phi_str) for i in trange(10000))
+    with open("data/sat_model_test", 'w', newline='') as csvfile:
+        datawriter = csv.writer(csvfile)
+        headwriter = csv.DictWriter(csvfile, fieldnames=["model"])
+        headwriter.writeheader()
+        datawriter.writerows(entries)
+
+
+def _time_gen_equiv_phi(phi_str, propositions, formula_size):
+    cluster = _init_default_cluster(1, 1)
+    client = Client(cluster.scheduler_address)
+    with parallel_backend('dask', wait_for_workers_timeout=120):
+        entries = Parallel()(
+            delayed(generate_equiv_formulas)(phi_str, 10000, propositions, 0, formula_size) for _ in trange(1))
+    with open("data/equiv_formula_test", 'w', newline='') as csvfile:
+        datawriter = csv.writer(csvfile)
+        headwriter = csv.DictWriter(csvfile, fieldnames=["formula"])
+        headwriter.writeheader()
+        datawriter.writerows(entries)
+
+
+if __name__ == "__main__":
+    # propos = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'p', 'q', 'r', 's']
+    # propos = ['a', 'b']
+    # file = "data/deep_verify_train_data_contrastive_small.csv"
+    # _hpc_data_gen(propositions=propos, grammar=grammar_str, n_entries=10000, n_contrast=5, states=5, e_prob=0.8,
+    #               max_labels=2, phi_len=4, cores=1, workers=1, out_file=file)
+
+    adj_mat = [[0, 0, 0, 0, 1, 1, 0],
+               [0, 0, 0, 0, 0, 1, 1],
+               [1, 1, 0, 0, 1, 0, 0],
+               [0, 1, 1, 0, 0, 0, 1],
+               [0, 1, 0, 1, 0, 0, 0],
+               [0, 0, 1, 0, 0, 0, 0],
+               [0, 0, 0, 1, 1, 1, 0]]
+    ap = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
+    label = ['e', 'b', 'e, b, g', 'f, c, d', 'c', 'a, c, b', 'g, f']
+    weight = [-3, 0, -3, 2, -3, 2, -2, 0, 2, -1, -1, -1, 0, 0, -2, -1, 0, 2]
+    ex_auto = Automaton.from_matrix(adj_mat, ap, label, weight)
+    ex_phi = "( ! f ) U c"
+    assert ex_auto.checkLTL("model_files/temp.smv", ex_phi)
+    _time_gen_phi_from_sys(ex_auto, ap, 7)
+    _time_gen_trace_from_sys(ex_auto)
+    _time_gen_sys_from_phi(ex_phi, 7, 0.3, ap, 3)
+    _time_gen_equiv_phi(ex_phi, ap, 14)
