@@ -67,6 +67,8 @@ class Automaton(object):
         graph.es["weight"] = weight_asg
         graph.es["label"] = weight_asg
 
+        state_names = [str(v.index) for v in graph.vs]
+        graph.vs["name"] = state_names
         graph.vs["label"] = label_asg
         return cls(graph, initial_state, atomic_propositions)
 
