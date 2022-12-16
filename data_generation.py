@@ -285,7 +285,7 @@ def _time_gen_phi_from_sys(sys_auto, propositions, phi_len):
     client = Client(cluster.scheduler_address)
     with parallel_backend('dask', wait_for_workers_timeout=120):
         entries = Parallel()(delayed(generate_formula)(sys_auto, propositions, phi_len, True, "model_files/temp" + str(i) + ".smv") for i in trange(10000))
-    with open("data/sat_formula_test", 'w', newline='') as csvfile:
+    with open("data/sat_formula_test.csv", 'w', newline='') as csvfile:
         datawriter = csv.writer(csvfile)
         headwriter = csv.DictWriter(csvfile, fieldnames=["formula"])
         headwriter.writeheader()
@@ -297,7 +297,7 @@ def _time_gen_trace_from_sys(sys_auto):
     client = Client(cluster.scheduler_address)
     with parallel_backend('dask', wait_for_workers_timeout=120):
         entries = Parallel()(delayed(generate_trace)(sys_auto.graph, 1000) for _ in trange(10000))
-    with open("data/trace_test", 'w', newline='') as csvfile:
+    with open("data/trace_test.csv", 'w', newline='') as csvfile:
         datawriter = csv.writer(csvfile)
         headwriter = csv.DictWriter(csvfile, fieldnames=["transitions", "value", "labels"])
         headwriter.writeheader()
@@ -309,7 +309,7 @@ def _time_gen_sys_from_phi(phi_str, states, e_prob, propositions, max_symbols):
     client = Client(cluster.scheduler_address)
     with parallel_backend('dask', wait_for_workers_timeout=120):
         entries = Parallel()(delayed(generate_auto_mat)(states, e_prob, propositions, max_symbols, "model_files/temp" + str(i) + ".smv", phi_str) for i in trange(10000))
-    with open("data/sat_model_test", 'w', newline='') as csvfile:
+    with open("data/sat_model_test.csv", 'w', newline='') as csvfile:
         datawriter = csv.writer(csvfile)
         headwriter = csv.DictWriter(csvfile, fieldnames=["model"])
         headwriter.writeheader()
@@ -322,7 +322,7 @@ def _time_gen_equiv_phi(phi_str, propositions, formula_size):
     with parallel_backend('dask', wait_for_workers_timeout=120):
         entries = Parallel()(
             delayed(generate_equiv_formulas)(phi_str, 10000, propositions, 0, formula_size) for _ in trange(1))
-    with open("data/equiv_formula_test", 'w', newline='') as csvfile:
+    with open("data/equiv_formula_test.csv", 'w', newline='') as csvfile:
         datawriter = csv.writer(csvfile)
         headwriter = csv.DictWriter(csvfile, fieldnames=["formula"])
         headwriter.writeheader()

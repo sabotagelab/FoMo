@@ -48,26 +48,29 @@ def get_props(formula_tokens, props):
 
 
 def plot_count(count_dict, ylabel, xlabel, save_path):
-    plt.figure()
+    plt.figure(figsize=(5, 3))
     plt.bar(count_dict.keys(), count_dict.values())
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
-    plt.savefig(save_path)
+    plt.tight_layout()
+    plt.savefig(save_path+".pdf", format="pdf")
 
 
-def plot_counts(count_dicts, ylabel, xlabel, save_path):
-    plt.figure()
-    for count_dict in count_dicts:
-        plt.bar(count_dict.keys(), count_dict.values(), alpha=0.5)
+def plot_counts(count_dicts, names, ylabel, xlabel, save_path):
+    plt.figure(figsize=(5, 3))
+    for i, count_dict in enumerate(count_dicts):
+        plt.bar(count_dict.keys(), count_dict.values(), alpha=0.5, label=names[i])
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
-    plt.savefig(save_path)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(save_path+".pdf", format="pdf")
 
 
 def count_to_list(count_dict):
     count_list = []
     for key in count_dict.keys():
-        count_list.extend([key]*count_dict[key])
+        count_list.extend([key] * count_dict[key])
     return count_list
 
 
@@ -93,24 +96,26 @@ if __name__ == "__main__":
     ltl_grammar = Grammar.fromstring(grammar_str)
     ltl_parser = ChartParser(ltl_grammar)
     csvpath = f"/home/colin/Documents/GitHub/deep_verify/data/deep_verify_eval_data.csv"
+    each_terms_base = {"lb": 0, "rb": 0, "G": 0, "F": 0, "X": 0, "U": 0, "!": 0, "&": 0, "|": 0, "->": 0, "xor": 0,
+                       "a": 0, "b": 0, "c": 0, "d": 0, "e": 0, "f": 0, "g": 0, "p": 0, "q": 0, "r": 0, "s": 0}
 
     terminals_count = defaultdict(lambda: 0, {})
     prod_rules_count = defaultdict(lambda: 0, {})
     operators_count = defaultdict(lambda: 0, {})
     props_count = defaultdict(lambda: 0, {})
-    each_terms_count = Counter()
+    each_terms_count = Counter(each_terms_base)
 
     sat_terminals_count = defaultdict(lambda: 0, {})
     sat_prod_rules_count = defaultdict(lambda: 0, {})
     sat_operators_count = defaultdict(lambda: 0, {})
     sat_props_count = defaultdict(lambda: 0, {})
-    sat_each_terms_count = Counter()
+    sat_each_terms_count = Counter(each_terms_base)
 
     unsat_terminals_count = defaultdict(lambda: 0, {})
     unsat_prod_rules_count = defaultdict(lambda: 0, {})
     unsat_operators_count = defaultdict(lambda: 0, {})
     unsat_props_count = defaultdict(lambda: 0, {})
-    unsat_each_terms_count = Counter()
+    unsat_each_terms_count = Counter(each_terms_base)
 
     with open(csvpath, 'r', newline='') as csvfile:
         datareader = csv.DictReader(csvfile)
@@ -155,21 +160,22 @@ if __name__ == "__main__":
 
     # plot data
     fig_dir = f"data/"
-    plot_count(prod_rules_count, "Number of formulas", "Number of production rules", fig_dir+"prod_rules_count")
-    plot_counts([sat_prod_rules_count, unsat_prod_rules_count], "Number of formulas", "Number of production rules",
-                fig_dir+"compare_prod_rules_count")
-    plot_count(terminals_count, "Number of formulas", "Formula length", fig_dir+"terminals_count")
-    plot_counts([sat_terminals_count, unsat_terminals_count], "Number of formulas", "Formula length",
-                fig_dir+"compare_terminals_count")
-    plot_count(operators_count, "Number of formulas", "Number of operators", fig_dir+"operators_count")
-    plot_counts([sat_operators_count, unsat_operators_count], "Number of formulas", "Number of operators",
+    dict_names = ['Satisfied', 'Unsatisfied']
+    plot_count(prod_rules_count, "Number of formulas", "Number of production rules", fig_dir + "prod_rules_count")
+    plot_counts([sat_prod_rules_count, unsat_prod_rules_count], dict_names, "Number of formulas",
+                "Number of production rules", fig_dir + "compare_prod_rules_count")
+    plot_count(terminals_count, "Number of formulas", "Formula length", fig_dir + "terminals_count")
+    plot_counts([sat_terminals_count, unsat_terminals_count], dict_names, "Number of formulas", "Formula length",
+                fig_dir + "compare_terminals_count")
+    plot_count(operators_count, "Number of formulas", "Number of operators", fig_dir + "operators_count")
+    plot_counts([sat_operators_count, unsat_operators_count], dict_names, "Number of formulas", "Number of operators",
                 fig_dir + "compare_operators_count")
-    plot_count(props_count, "Number of formulas", "Number of propositions", fig_dir+"propositions_count")
-    plot_counts([sat_props_count, unsat_props_count], "Number of formulas", "Number of propositions",
-                fig_dir+"compare_propositions_count")
-    plot_count(each_terms_count, "Number of each terminal", "Terminal symbol", fig_dir+"each_terms_count")
-    plot_counts([sat_each_terms_count, unsat_each_terms_count], "Number of each terminal", "Terminal symbol",
-                fig_dir + "compare_each_terms_count")
+    plot_count(props_count, "Number of formulas", "Number of propositions", fig_dir + "propositions_count")
+    plot_counts([sat_props_count, unsat_props_count], dict_names, "Number of formulas", "Number of propositions",
+                fig_dir + "compare_propositions_count")
+    plot_count(each_terms_count, "Number of each terminal", "Terminal symbol", fig_dir + "each_terms_count")
+    plot_counts([sat_each_terms_count, unsat_each_terms_count], dict_names, "Number of each terminal",
+                "Terminal symbol", fig_dir + "compare_each_terms_count")
 
     # calculate summary statistics
     prod_rules_count_list = count_to_list(prod_rules_count)
