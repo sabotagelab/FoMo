@@ -281,8 +281,8 @@ def _hpc_data_gen(propositions, grammar, n_entries, n_contrast, states, e_prob, 
 
 
 def _time_gen_phi_from_sys(sys_auto, propositions, phi_len):
-    cluster = _init_default_cluster(1, 1)
-    client = Client(cluster.scheduler_address)
+    # cluster = _init_default_cluster(1, 1)
+    # client = Client(cluster.scheduler_address)
     with parallel_backend('dask', wait_for_workers_timeout=120):
         entries = Parallel()(delayed(generate_formula)(sys_auto, propositions, phi_len, True, "model_files/temp" + str(i) + ".smv") for i in trange(10000))
     with open("data/sat_formula_test.csv", 'w', newline='') as csvfile:
@@ -293,8 +293,8 @@ def _time_gen_phi_from_sys(sys_auto, propositions, phi_len):
 
 
 def _time_gen_trace_from_sys(sys_auto):
-    cluster = _init_default_cluster(1, 1)
-    client = Client(cluster.scheduler_address)
+    # cluster = _init_default_cluster(1, 1)
+    # client = Client(cluster.scheduler_address)
     with parallel_backend('dask', wait_for_workers_timeout=120):
         entries = Parallel()(delayed(generate_trace)(sys_auto.graph, 1000) for _ in trange(10000))
     with open("data/trace_test.csv", 'w', newline='') as csvfile:
@@ -305,8 +305,8 @@ def _time_gen_trace_from_sys(sys_auto):
 
 
 def _time_gen_sys_from_phi(phi_str, states, e_prob, propositions, max_symbols):
-    cluster = _init_default_cluster(1, 1)
-    client = Client(cluster.scheduler_address)
+    # cluster = _init_default_cluster(1, 1)
+    # client = Client(cluster.scheduler_address)
     with parallel_backend('dask', wait_for_workers_timeout=120):
         entries = Parallel()(delayed(generate_auto_mat)(states, e_prob, propositions, max_symbols, "model_files/temp" + str(i) + ".smv", phi_str) for i in trange(10000))
     with open("data/sat_model_test.csv", 'w', newline='') as csvfile:
@@ -317,8 +317,8 @@ def _time_gen_sys_from_phi(phi_str, states, e_prob, propositions, max_symbols):
 
 
 def _time_gen_equiv_phi(phi_str, propositions, formula_size):
-    cluster = _init_default_cluster(1, 1)
-    client = Client(cluster.scheduler_address)
+    # cluster = _init_default_cluster(1, 1)
+    # client = Client(cluster.scheduler_address)
     with parallel_backend('dask', wait_for_workers_timeout=120):
         entries = Parallel()(
             delayed(generate_equiv_formulas)(phi_str, 10000, propositions, 0, formula_size) for _ in trange(1))
@@ -349,6 +349,8 @@ if __name__ == "__main__":
     ex_auto = Automaton.from_matrix(adj_mat, ap, label, weight)
     ex_phi = "( ! f ) U c"
     assert ex_auto.checkLTL("model_files/temp.smv", ex_phi)
+    cluster = _init_default_cluster(1, 1)
+    client = Client(cluster.scheduler_address)
     _time_gen_phi_from_sys(ex_auto, ap, 7)
     _time_gen_trace_from_sys(ex_auto)
     _time_gen_sys_from_phi(ex_phi, 7, 0.3, ap, 3)
