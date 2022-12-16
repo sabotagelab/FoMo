@@ -60,9 +60,9 @@ grammar_str = """
 
 
 def generate_automaton(num_vertices, prob_edges, symbols=None, max_symbols=1,
-                       smv_file="temp.smv", formula=None, satisfy=True):
+                       smv_file="temp.smv", formula=None, satisfy=True, min_weight=0, max_weight=1):
     # get a random graph that's automaton shaped
-    graph = generateGraph(num_vertices, prob_edges, 0, 1, symbols, max_symbols)
+    graph = generateGraph(num_vertices, prob_edges, min_weight, max_weight, symbols, max_symbols)
     if formula:
         # reject the automaton if it doesn't satisfy the formula
         auto = Automaton(graph, 0, symbols)
@@ -80,8 +80,9 @@ def generate_automaton(num_vertices, prob_edges, symbols=None, max_symbols=1,
 
 
 def generate_auto_mat(num_vertices, prob_edges, symbols=None, max_symbols=1,
-                       smv_file="temp.smv", formula=None, satisfy=True):
-    auto = generate_automaton(num_vertices, prob_edges, symbols, max_symbols, smv_file, formula, satisfy)
+                      smv_file="temp.smv", formula=None, satisfy=True, min_weight=0, max_weight=1):
+    auto = generate_automaton(num_vertices, prob_edges, symbols, max_symbols, smv_file, formula, satisfy, min_weight,
+                              max_weight)
     return auto.convertToMatrix()
 
 
@@ -92,6 +93,7 @@ def generate_trace(graph, trace_len):
 def generate_formula(automaton, grammar, max_formula_length, satisfying=True, smv_file="temp.smv"):
     # grammar should be a Grammar object if spot_imported is False, and a string of propositions otherwise.
     # TODO: consider replacing sampling with uniform random
+    # TODO: refactor so automaton is optional
     valid_formula = None
     invalid_formulas = []
     formula_size = random.randint(1, max_formula_length)
@@ -284,7 +286,9 @@ def _time_gen_phi_from_sys(sys_auto, propositions, phi_len):
     # cluster = _init_default_cluster(1, 1)
     # client = Client(cluster.scheduler_address)
     with parallel_backend('dask', wait_for_workers_timeout=120):
-        entries = Parallel()(delayed(generate_formula)(sys_auto, propositions, phi_len, True, "model_files/temp" + str(i) + ".smv") for i in trange(10000))
+        entries = Parallel()(
+            delayed(generate_formula)(sys_auto, propositions, phi_len, True, "model_files/temp" + str(i) + ".smv") for i
+            in trange(10000))
     with open("data/sat_formula_test.csv", 'w', newline='') as csvfile:
         datawriter = csv.writer(csvfile)
         headwriter = csv.DictWriter(csvfile, fieldnames=["formula"])
@@ -308,7 +312,9 @@ def _time_gen_sys_from_phi(phi_str, states, e_prob, propositions, max_symbols):
     # cluster = _init_default_cluster(1, 1)
     # client = Client(cluster.scheduler_address)
     with parallel_backend('dask', wait_for_workers_timeout=120):
-        entries = Parallel()(delayed(generate_auto_mat)(states, e_prob, propositions, max_symbols, "model_files/temp" + str(i) + ".smv", phi_str) for i in trange(10000))
+        entries = Parallel()(
+            delayed(generate_auto_mat)(states, e_prob, propositions, max_symbols, "model_files/temp" + str(i) + ".smv",
+                                       phi_str) for i in trange(10000))
     with open("data/sat_model_test.csv", 'w', newline='') as csvfile:
         datawriter = csv.writer(csvfile)
         headwriter = csv.DictWriter(csvfile, fieldnames=["model"])
@@ -351,7 +357,7 @@ if __name__ == "__main__":
     assert ex_auto.checkLTL("model_files/temp.smv", ex_phi)
     cluster = _init_default_cluster(1, 1)
     client = Client(cluster.scheduler_address)
-    _time_gen_phi_from_sys(ex_auto, ap, 7)
-    _time_gen_trace_from_sys(ex_auto)
-    _time_gen_sys_from_phi(ex_phi, 7, 0.3, ap, 3)
+    # _time_gen_phi_from_sys(ex_auto, ap, 7)
+    # _time_gen_trace_from_sys(ex_auto)
+    # _time_gen_sys_from_phi(ex_phi, 7, 0.3, ap, 3)
     _time_gen_equiv_phi(ex_phi, ap, 14)
