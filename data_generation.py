@@ -298,7 +298,7 @@ def _time_gen_trace_from_sys(sys_auto):
     # cluster = _init_default_cluster(1, 1)
     # client = Client(cluster.scheduler_address)
     with parallel_backend('dask', wait_for_workers_timeout=120):
-        entries = Parallel()(delayed(generateHistory)(sys_auto.graph, sys_auto.graph.es["weights"], 1000, 0.9)
+        entries = Parallel()(delayed(generateHistory)(sys_auto.graph, sys_auto.graph.es["weight"], 1000, 0.9)
                              for _ in trange(10000))
     with open("data/trace_test.csv", 'w', newline='') as csvfile:
         datawriter = csv.writer(csvfile)
