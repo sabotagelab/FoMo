@@ -262,14 +262,12 @@ def _hpc_data_gen(propositions, grammar, n_entries, n_contrast, states, e_prob, 
         if n_contrast:
             entries = Parallel()(
                 delayed(generate_contrastive_mfl_entry)(propositions, gram, states, e_prob, max_labels, phi_len,
-                                                        "model_files/temp" + str(i) + ".smv", 5) for i
-                in
-                trange(data_size))
+                                                        "model_files/temp" + str(i) + ".smv", 5)
+                                                        for i in trange(data_size))
         else:
             entries = Parallel()(
                 delayed(generate_mfl_entry)(propositions, gram, states, e_prob, max_labels, phi_len,
-                                            "model_files/temp" + str(i) + ".smv") for
-                i in trange(data_size))
+                                            "model_files/temp" + str(i) + ".smv") for i in trange(data_size))
 
     with open(out_file, 'w', newline='') as csvfile:
         datawriter = csv.writer(csvfile)
@@ -287,8 +285,8 @@ def _time_gen_phi_from_sys(sys_auto, propositions, phi_len):
     # client = Client(cluster.scheduler_address)
     with parallel_backend('dask', wait_for_workers_timeout=120):
         entries = Parallel()(
-            delayed(generate_formula)(sys_auto, propositions, phi_len, True, "model_files/temp" + str(i) + ".smv") for i
-            in trange(10000))
+            delayed(generate_formula)(sys_auto, propositions, phi_len, True, "model_files/temp" + str(i) + ".smv")
+            for i in trange(10000))
     with open("data/sat_formula_test.csv", 'w', newline='') as csvfile:
         datawriter = csv.writer(csvfile)
         headwriter = csv.DictWriter(csvfile, fieldnames=["formula"])
@@ -300,7 +298,8 @@ def _time_gen_trace_from_sys(sys_auto):
     # cluster = _init_default_cluster(1, 1)
     # client = Client(cluster.scheduler_address)
     with parallel_backend('dask', wait_for_workers_timeout=120):
-        entries = Parallel()(delayed(generate_trace)(sys_auto.graph, 1000) for _ in trange(10000))
+        entries = Parallel()(delayed(generateHistory)(sys_auto.graph, sys_auto.graph.es["weights"], 1000, 0.9)
+                             for _ in trange(10000))
     with open("data/trace_test.csv", 'w', newline='') as csvfile:
         datawriter = csv.writer(csvfile)
         headwriter = csv.DictWriter(csvfile, fieldnames=["transitions", "value", "labels"])
@@ -323,11 +322,8 @@ def _time_gen_sys_from_phi(phi_str, states, e_prob, propositions, max_symbols):
 
 
 def _time_gen_equiv_phi(phi_str, propositions, formula_size):
-    # cluster = _init_default_cluster(1, 1)
-    # client = Client(cluster.scheduler_address)
-    with parallel_backend('dask', wait_for_workers_timeout=120):
-        entries = Parallel()(
-            delayed(generate_equiv_formulas)(phi_str, 10000, propositions, 0, formula_size) for _ in trange(1))
+    print("Generating equivalent formulas")
+    entries = generate_equiv_formulas(phi_str, 10000, propositions, 0, formula_size)
     with open("data/equiv_formula_test.csv", 'w', newline='') as csvfile:
         datawriter = csv.writer(csvfile)
         headwriter = csv.DictWriter(csvfile, fieldnames=["formula"])
@@ -358,6 +354,6 @@ if __name__ == "__main__":
     cluster = _init_default_cluster(1, 1)
     client = Client(cluster.scheduler_address)
     # _time_gen_phi_from_sys(ex_auto, ap, 7)
-    # _time_gen_trace_from_sys(ex_auto)
+    _time_gen_trace_from_sys(ex_auto)
     # _time_gen_sys_from_phi(ex_phi, 7, 0.3, ap, 3)
     _time_gen_equiv_phi(ex_phi, ap, 14)
