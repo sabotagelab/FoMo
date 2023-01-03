@@ -183,7 +183,7 @@ def check_formula(candidate_formula, formula_size):
     return not bad_formula
 
 
-def generate_mfl_entry(props, auto_size, auto_connect, max_symbols, formula_length, model_file):
+def generate_mfl_entry(props, auto_size, auto_connect, max_symbols, formula_length, model_file="temp.smv"):
     coin = [True, False]
     auto = generate_automaton(auto_size, auto_connect, symbols=props, max_symbols=max_symbols)
     # model = auto.convertToNuXmv(model_file, x=None, lang="LTL", return_string=True)
@@ -202,8 +202,8 @@ def generate_mfl_entry(props, auto_size, auto_connect, max_symbols, formula_leng
     return [model, formula, label]
 
 
-def generate_contrastive_mfl_entry(props, auto_size, auto_connect, max_symbols, formula_length, model_file,
-                                   negative_examples):
+def generate_contrastive_mfl_entry(props, auto_size, auto_connect, max_symbols, formula_length, negative_examples,
+                                   model_file="temp.smv"):
     auto = generate_automaton(auto_size, auto_connect, symbols=props, max_symbols=max_symbols)
     pos_model = strip_auto_mat(auto.convertToMatrix())
     formula = generate_formula(auto, props, formula_length, True, smv_file=model_file)
@@ -261,8 +261,8 @@ def _hpc_data_gen(propositions, grammar, n_entries, n_contrast, states, e_prob, 
     with parallel_backend('dask', wait_for_workers_timeout=120):
         if n_contrast:
             entries = Parallel()(
-                delayed(generate_contrastive_mfl_entry)(propositions, gram, states, e_prob, max_labels, phi_len,
-                                                        "model_files/temp" + str(i) + ".smv", 5)
+                delayed(generate_contrastive_mfl_entry)(propositions, gram, states, e_prob, max_labels, phi_len, 5,
+                                                        "model_files/temp" + str(i) + ".smv")
                                                         for i in trange(data_size))
         else:
             entries = Parallel()(
