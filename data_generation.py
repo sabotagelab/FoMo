@@ -86,8 +86,8 @@ def generate_auto_mat(num_vertices, prob_edges, symbols=None, max_symbols=1,
     return auto.convertToMatrix()
 
 
-def generate_trace(auto, trace_len):
-    return generateHistory(auto.graph, auto.graph.es["weight"], trace_len, 0)[2]
+def generate_trace(auto, trace_len, discount_factor=1):
+    return generateHistory(auto.graph, auto.graph.es["weight"], trace_len, discount_factor)
 
 
 def generate_formula(automaton, grammar, max_formula_length, satisfying=True, smv_file="temp.smv"):
