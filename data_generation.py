@@ -183,7 +183,7 @@ def check_formula(candidate_formula, formula_size):
     return not bad_formula
 
 
-def generate_mfl_entry(props, grammar, auto_size, auto_connect, max_symbols, formula_length, model_file):
+def generate_mfl_entry(props, auto_size, auto_connect, max_symbols, formula_length, model_file):
     coin = [True, False]
     auto = generate_automaton(auto_size, auto_connect, symbols=props, max_symbols=max_symbols)
     # model = auto.convertToNuXmv(model_file, x=None, lang="LTL", return_string=True)
@@ -193,20 +193,20 @@ def generate_mfl_entry(props, grammar, auto_size, auto_connect, max_symbols, for
     flip = random.choice(coin)
     if flip:
         label = "1"
-        formula = generate_formula(auto, grammar, formula_length, smv_file=model_file)
+        formula = generate_formula(auto, props, formula_length, smv_file=model_file)
     else:
         label = "0"
-        formula = generate_formula(auto, grammar, formula_length, False, smv_file=model_file)
+        formula = generate_formula(auto, props, formula_length, False, smv_file=model_file)
     # delete model file (model has been checked, and content is in the model string
     os.remove(model_file)
     return [model, formula, label]
 
 
-def generate_contrastive_mfl_entry(props, grammar, auto_size, auto_connect, max_symbols, formula_length, model_file,
+def generate_contrastive_mfl_entry(props, auto_size, auto_connect, max_symbols, formula_length, model_file,
                                    negative_examples):
     auto = generate_automaton(auto_size, auto_connect, symbols=props, max_symbols=max_symbols)
     pos_model = strip_auto_mat(auto.convertToMatrix())
-    formula = generate_formula(auto, grammar, formula_length, True, smv_file=model_file)
+    formula = generate_formula(auto, props, formula_length, True, smv_file=model_file)
     negative_models = []
     while len(negative_models) < negative_examples:
         auto_mat = generate_automaton(auto_size, auto_connect, symbols=props, max_symbols=max_symbols,
@@ -346,9 +346,9 @@ if __name__ == "__main__":
                [0, 0, 1, 0, 0, 0, 0],
                [0, 0, 0, 1, 1, 1, 0]]
     ap = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
-    label = ['e', 'b', 'e, b, g', 'f, c, d', 'c', 'a, c, b', 'g, f']
+    labels = ['e', 'b', 'e, b, g', 'f, c, d', 'c', 'a, c, b', 'g, f']
     weight = [-3, 0, -3, 2, -3, 2, -2, 0, 2, -1, -1, -1, 0, 0, -2, -1, 0, 2]
-    ex_auto = Automaton.from_matrix(adj_mat, ap, label, weight)
+    ex_auto = Automaton.from_matrix(adj_mat, ap, labels, weight)
     ex_phi = "( ! f ) U c"
     assert ex_auto.checkLTL("model_files/temp.smv", ex_phi)
     cluster = _init_default_cluster(1, 1)
