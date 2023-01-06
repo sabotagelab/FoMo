@@ -1,6 +1,7 @@
-# autonomous-learning
+# FoMo (Formula/Model generation)
 
-Repository related to learning behaviors exhibited by autonomous systems.
+A tool for generating system models and temporal logic formulas.
+Quickly create datasets to train machine-learning based formal methods.
 
 random_weighted_automaton.py contains provides a function to generate a weighted directed graph via Erdos-Renyi, and another that uses random walks to generate histories. The former returns a graph object, and the latter returns a list of 2-tuples (a list of vertices visited, the accumulated value of the history).
 
